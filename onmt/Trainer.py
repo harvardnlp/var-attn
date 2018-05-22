@@ -12,6 +12,9 @@ users of this library) for the strategy things we do.
 import time
 import sys
 import math
+
+from collections import defaultdict
+
 import torch
 import torch.nn as nn
 
@@ -29,29 +32,37 @@ class Statistics(object):
     * perplexity
     * elapsed time
     """
-    def __init__(self, loss=0, n_words=0, n_correct=0):
-        self.loss = loss
-        self.n_words = n_words
-        self.n_correct = n_correct
-        self.n_src_words = 0
-        self.start_time = time.time()
+    def __init__(self, xent=0, kl=0, n_words=0, n_correct=0):
+        self._xent = xent
+        self._kl = kl
+        self._n_words = n_words
+        self._n_correct = n_correct
+        self._n_src_words = 0
+        self._start_time = time.time()
 
     def update(self, stat):
-        self.loss += stat.loss
-        self.n_words += stat.n_words
-        self.n_correct += stat.n_correct
+        self._xent += stat._xent
+        self._kl += stat._kl
+        self._n_words += stat._n_words
+        self._n_correct += stat._n_correct
 
     def accuracy(self):
-        return 100 * (self.n_correct / self.n_words)
+        return 100 * (self._n_correct / self._n_words)
 
     def xent(self):
-        return self.loss / self.n_words
+        return self._xent / self._n_words
+
+    def kl(self):
+        return self._kl / self._n_words
 
     def ppl(self):
-        return math.exp(min(self.loss / self.n_words, 100))
+        return math.exp(min(self._xent / self._n_words, 100))
+
+    def expelbo(self):
+        return math.exp(min((self._xent + self._kl) / self._n_words, 100))
 
     def elapsed_time(self):
-        return time.time() - self.start_time
+        return time.time() - self._start_time
 
     def output(self, epoch, batch, n_batches, start):
         """Write out statistics to stdout.
@@ -63,14 +74,17 @@ class Statistics(object):
            start (int): start time of epoch.
         """
         t = self.elapsed_time()
-        print(("Epoch %2d, %5d/%5d; acc: %6.2f; ppl: %6.2f; xent: %6.2f; " +
+        print(("Epoch %2d, %5d/%5d; acc: %6.2f; " +
+               "expelbo: %6.2f; ppl: %6.2f; xent: %6.2f; kl: %6.2f; " +
                "%3.0f src tok/s; %3.0f tgt tok/s; %6.0f s elapsed") %
               (epoch, batch,  n_batches,
                self.accuracy(),
+               self.expelbo(),
                self.ppl(),
                self.xent(),
-               self.n_src_words / (t + 1e-5),
-               self.n_words / (t + 1e-5),
+               self.kl(),
+               self._n_src_words / (t + 1e-5),
+               self._n_words / (t + 1e-5),
                time.time() - start))
         sys.stdout.flush()
 
@@ -112,7 +126,9 @@ class Trainer(object):
 
     def __init__(self, model, train_loss, valid_loss, optim,
                  trunc_size=0, shard_size=32, data_type='text',
-                 norm_method="sents", grad_accum_count=1):
+                 norm_method="sents", grad_accum_count=1,
+                 q_warmup_start=0, q_warmup_steps=0, n_attn_samples=1):
+
         # Basic attributes.
         self.model = model
         self.train_loss = train_loss
@@ -124,6 +140,14 @@ class Trainer(object):
         self.norm_method = norm_method
         self.grad_accum_count = grad_accum_count
         self.progress_step = 0
+
+        self.q_warmup_start = q_warmup_start
+        self.q_warmup_steps = q_warmup_steps
+        self.n_attn_samples = n_attn_samples
+        self.alphas = defaultdict(lambda: 1)
+        if q_warmup_steps > 0:
+            for i, x in enumerate(torch.range(q_warmup_start, 1, 1 / q_warmup_steps).tolist()):
+                self.alphas[i] = x
 
         assert(grad_accum_count > 0)
         if grad_accum_count > 1:
@@ -181,7 +205,7 @@ class Trainer(object):
                     report_stats = report_func(
                             epoch, idx, num_batches,
                             self.progress_step,
-                            total_stats.start_time, self.optim.lr,
+                            total_stats._start_time, self.optim.lr,
                             report_stats)
                     self.progress_step += 1
 
@@ -222,11 +246,11 @@ class Trainer(object):
             tgt = onmt.io.make_features(batch, 'tgt')
 
             # F-prop through the model.
-            outputs, attns, _ = self.model(src, tgt, src_lengths)
+            outputs, attns, _, dist_info = self.model(src, tgt, src_lengths)
 
             # Compute loss.
             batch_stats = self.valid_loss.monolithic_compute_loss(
-                    batch, outputs, attns)
+                    batch, outputs, attns, dist_info=dist_info)
 
             # Update statistics.
             stats.update(batch_stats)
@@ -289,7 +313,7 @@ class Trainer(object):
             src = onmt.io.make_features(batch, 'src', self.data_type)
             if self.data_type == 'text':
                 _, src_lengths = batch.src
-                report_stats.n_src_words += src_lengths.sum()
+                report_stats._n_src_words += src_lengths.sum()
             else:
                 src_lengths = None
 
@@ -302,13 +326,28 @@ class Trainer(object):
                 # 2. F-prop all but generator.
                 if self.grad_accum_count == 1:
                     self.model.zero_grad()
-                outputs, attns, dec_state = \
+                outputs, attns, dec_state, dist_info = \
                     self.model(src, tgt, src_lengths, dec_state)
 
                 # 3. Compute loss in shards for memory efficiency.
+                self.train_loss.alpha = self.alphas[self.progress_step]
                 batch_stats = self.train_loss.sharded_compute_loss(
                         batch, outputs, attns, j,
-                        trunc_size, self.shard_size, normalization)
+                        trunc_size, self.shard_size, normalization,
+                        dist_info=dist_info)
+
+                # nan-check
+                nans = [
+                    (name, param)
+                    for name, param in self.model.named_parameters()
+                    if param.grad is not None and (param.grad != param.grad).any()
+                ]
+                if nans:
+                    print("FOUND NANS")
+                    print([x[0] for x in nans])
+                    for _, param in nans:
+                        param.grad[param.grad!=param.grad] = 0
+                    #import pdb; pdb.set_trace()
 
                 # 4. Update the parameters and statistics.
                 if self.grad_accum_count == 1:

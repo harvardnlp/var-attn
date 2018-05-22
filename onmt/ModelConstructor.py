@@ -2,23 +2,35 @@
 This file is for models creation, which consults options
 and creates each encoder and decoder accordingly.
 """
+
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 import onmt
 import onmt.io
 import onmt.Models
 import onmt.modules
 from onmt.Models import NMTModel, MeanEncoder, RNNEncoder, \
-                        StdRNNDecoder, InputFeedRNNDecoder
+                        StdRNNDecoder, InputFeedRNNDecoder, \
+                        Generator
+from onmt.ViModels import InferenceNetwork, ViRNNDecoder, ViNMTModel
 from onmt.modules import Embeddings, ImageEncoder, CopyGenerator, \
                          TransformerEncoder, TransformerDecoder, \
                          CNNEncoder, CNNDecoder, AudioEncoder
 from onmt.Utils import use_gpu
 from torch.nn.init import xavier_uniform
 
+scoresF_dict = {
+    "softplus": F.softplus,
+    "exp": lambda x: x.clamp(-10, 10).exp(),
+    #"exp": lambda x: x.exp(),
+    "relu": lambda x: x.clamp(min=1e-2),
+    "sm": lambda x: F.softmax(x, dim=-1),
+}
 
-def make_embeddings(opt, word_dict, feature_dicts, for_encoder=True):
+def make_embeddings(opt, word_dict, feature_dicts, for_encoder=True,
+                    for_inference_network=False):
     """
     Make an Embeddings instance.
     Args:
@@ -28,9 +40,15 @@ def make_embeddings(opt, word_dict, feature_dicts, for_encoder=True):
         for_encoder(bool): make Embeddings for encoder or decoder?
     """
     if for_encoder:
-        embedding_dim = opt.src_word_vec_size
+        if not for_inference_network:
+            embedding_dim = opt.src_word_vec_size
+        else:
+            embedding_dim = opt.inference_network_src_word_vec_size
     else:
-        embedding_dim = opt.tgt_word_vec_size
+        if not for_inference_network:
+            embedding_dim = opt.tgt_word_vec_size
+        else:
+            embedding_dim = opt.inference_network_tgt_word_vec_size
 
     word_padding_idx = word_dict.stoi[onmt.io.PAD_WORD]
     num_word_embeddings = len(word_dict)
@@ -39,13 +57,17 @@ def make_embeddings(opt, word_dict, feature_dicts, for_encoder=True):
                          for feat_dict in feature_dicts]
     num_feat_embeddings = [len(feat_dict) for feat_dict in
                            feature_dicts]
+    if not for_inference_network:
+        dropout = opt.dropout
+    else:
+        dropout = opt.inference_network_dropout
 
     return Embeddings(word_vec_size=embedding_dim,
                       position_encoding=opt.position_encoding,
                       feat_merge=opt.feat_merge,
                       feat_vec_exponent=opt.feat_vec_exponent,
                       feat_vec_size=opt.feat_vec_size,
-                      dropout=opt.dropout,
+                      dropout=dropout,
                       word_padding_idx=word_padding_idx,
                       feat_padding_idx=feats_padding_idx,
                       word_vocab_size=num_word_embeddings,
@@ -76,6 +98,55 @@ def make_encoder(opt, embeddings):
                           opt.bridge)
 
 
+def make_inference_network(opt, src_embeddings, tgt_embeddings,
+                           src_dict, src_feature_dicts,
+                           tgt_dict, tgt_feature_dicts):
+    print ('Making inference network:')
+    if not opt.inference_network_share_embeddings:
+        print ('    * share embeddings: False')
+        src_embeddings = make_embeddings(opt, src_dict,
+                                         src_feature_dicts,
+                                         for_inference_network=True)
+        tgt_embeddings = make_embeddings(opt, tgt_dict,
+                                         tgt_feature_dicts, for_encoder=False,
+                                         for_inference_network=True)
+    else:
+        print ('    * share embeddings: True')
+
+    inference_network_type = opt.inference_network_type
+    inference_network_src_layers = opt.inference_network_src_layers
+    inference_network_tgt_layers = opt.inference_network_tgt_layers
+    rnn_type = opt.rnn_type
+    rnn_size = opt.inference_network_rnn_size
+    dropout = opt.inference_network_dropout
+    scoresFstring = opt.alpha_transformation
+    scoresF = scoresF_dict[scoresFstring]
+    natural_gradient = opt.inference_network_natural_gradient > 0
+    normalization = opt.inference_network_normalization
+    attn_type = opt.q_attn_type
+
+    print ('    * inference network type: %s'%inference_network_type)
+    print ('    * inference network RNN type: %s'%rnn_type)
+    print ('    * inference network RNN size: %s'%rnn_size)
+    print ('    * inference network dropout: %s'%dropout)
+    print ('    * inference network src layers: %s'%inference_network_src_layers)
+    print ('    * inference network tgt layers: %s'%inference_network_tgt_layers)
+    print ('    * inference network alpha trans: %s'%scoresFstring)
+    print ('    * inference network natural gradient: %s'%natural_gradient)
+    print ('    * inference network normalization: %s'%normalization)
+    print ('    * inference network attn type: %s'%attn_type)
+    print ('    * inference network dist type: %s'%opt.q_dist_type)
+    print ('    * TODO: RNN\'s could be possibly shared')
+
+    return InferenceNetwork(inference_network_type,
+                            src_embeddings, tgt_embeddings,
+                            rnn_type, inference_network_src_layers,
+                            inference_network_tgt_layers, rnn_size, dropout,
+                            attn_type=opt.q_attn_type,
+                            dist_type=opt.q_dist_type, use_natural=natural_gradient,
+                            scoresF=scoresF, normalization=normalization)
+
+
 def make_decoder(opt, embeddings):
     """
     Various decoder dispatcher function.
@@ -92,7 +163,8 @@ def make_decoder(opt, embeddings):
                           opt.global_attention, opt.copy_attn,
                           opt.cnn_kernel_width, opt.dropout,
                           embeddings)
-    elif opt.input_feed:
+    elif opt.input_feed and opt.inference_network_type == "none":
+        print("input feed")
         return InputFeedRNNDecoder(opt.rnn_type, opt.brnn,
                                    opt.dec_layers, opt.rnn_size,
                                    opt.global_attention,
@@ -102,6 +174,29 @@ def make_decoder(opt, embeddings):
                                    opt.dropout,
                                    embeddings,
                                    opt.reuse_copy_attn)
+    elif opt.input_feed and opt.inference_network_type != "none":
+        print("VARIATIONAL DECODER")
+        scoresFstring = opt.alpha_transformation
+        scoresF = scoresF_dict[scoresFstring]
+
+        return ViRNNDecoder(
+            opt.rnn_type, opt.brnn,
+            opt.dec_layers, opt.rnn_size,
+            opt.global_attention,
+            opt.coverage_attn,
+            opt.context_gate,
+            opt.copy_attn,
+            opt.dropout,
+            embeddings,
+            opt.reuse_copy_attn,
+            p_dist_type = opt.p_dist_type,
+            q_dist_type = opt.q_dist_type,
+            use_prior = opt.use_generative_model > 0,
+            scoresF = scoresF,
+            input_feed_type = opt.p_input_feed,
+            n_samples = opt.n_samples,
+            mode = opt.mode,
+        )
     else:
         return StdRNNDecoder(opt.rnn_type, opt.brnn,
                              opt.dec_layers, opt.rnn_size,
@@ -149,9 +244,9 @@ def make_base_model(model_opt, fields, gpu, checkpoint=None):
     # Make encoder.
     if model_opt.model_type == "text":
         src_dict = fields["src"].vocab
-        feature_dicts = onmt.io.collect_feature_vocabs(fields, 'src')
+        src_feature_dicts = onmt.io.collect_feature_vocabs(fields, 'src')
         src_embeddings = make_embeddings(model_opt, src_dict,
-                                         feature_dicts)
+                                         src_feature_dicts)
         encoder = make_encoder(model_opt, src_embeddings)
     elif model_opt.model_type == "img":
         encoder = ImageEncoder(model_opt.enc_layers,
@@ -168,9 +263,9 @@ def make_base_model(model_opt, fields, gpu, checkpoint=None):
 
     # Make decoder.
     tgt_dict = fields["tgt"].vocab
-    feature_dicts = onmt.io.collect_feature_vocabs(fields, 'tgt')
+    tgt_feature_dicts = onmt.io.collect_feature_vocabs(fields, 'tgt')
     tgt_embeddings = make_embeddings(model_opt, tgt_dict,
-                                     feature_dicts, for_encoder=False)
+                                     tgt_feature_dicts, for_encoder=False)
 
     # Share the embedding matrix - preprocess with share_vocab required.
     if model_opt.share_embeddings:
@@ -183,15 +278,35 @@ def make_base_model(model_opt, fields, gpu, checkpoint=None):
 
     decoder = make_decoder(model_opt, tgt_embeddings)
 
-    # Make NMTModel(= encoder + decoder).
-    model = NMTModel(encoder, decoder)
+    # Make inference network.
+    inference_network = make_inference_network(
+        model_opt,
+        src_embeddings, tgt_embeddings,
+        src_dict, src_feature_dicts,
+        tgt_dict, tgt_feature_dicts
+    ) if model_opt.inference_network_type != "none" else None
+
+    # Make NMTModel(= encoder + decoder + inference network).
+    model = (
+        NMTModel(encoder, decoder)
+        if inference_network is None
+        else ViNMTModel(
+            encoder, decoder,
+            inference_network,
+            dist_type=model_opt.p_dist_type,
+            dbg=model_opt.dbg_inf,
+            use_prior=model_opt.use_generative_model > 0)
+    )
     model.model_type = model_opt.model_type
 
     # Make Generator.
     if not model_opt.copy_attn:
+        """
         generator = nn.Sequential(
             nn.Linear(model_opt.rnn_size, len(fields["tgt"].vocab)),
-            nn.LogSoftmax(dim=-1))
+            nn.LogSoftmax(dim=1))
+        """
+        generator = Generator(model_opt.rnn_size, len(fields["tgt"].vocab))
         if model_opt.share_decoder_embeddings:
             generator[0].weight = decoder.embeddings.word_lut.weight
     else:
@@ -201,7 +316,8 @@ def make_base_model(model_opt, fields, gpu, checkpoint=None):
     # Load the model states from checkpoint or initialize them.
     if checkpoint is not None:
         print('Loading model parameters.')
-        model.load_state_dict(checkpoint['model'])
+        #model.load_state_dict(checkpoint['model'])
+        model.load_state_dict(checkpoint['model'], strict=False)
         generator.load_state_dict(checkpoint['generator'])
     else:
         if model_opt.param_init != 0.0:
@@ -229,7 +345,7 @@ def make_base_model(model_opt, fields, gpu, checkpoint=None):
     model.generator = generator
 
     # Make the whole model leverage GPU if indicated to do so.
-    if gpu:
+    if gpu >= 0:
         model.cuda()
     else:
         model.cpu()

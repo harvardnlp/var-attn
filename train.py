@@ -243,6 +243,20 @@ def train_model(model, fields, optim, data_type, model_opt):
                            trunc_size, shard_size, data_type,
                            norm_method, grad_accum_count)
 
+    if model_opt.eval_only > 0:
+        assert model.use_prior
+        valid_iter = make_dataset_iter(lazily_load_dataset("valid"),
+                                       fields, opt,
+                                       is_train=False)
+        valid_stats = trainer.validate(valid_iter)
+        print('Validation exp(elbo): %g' % valid_stats.expelbo())
+        print('Validation perplexity: %g' % valid_stats.ppl())
+        print('Validation xent: %g' % valid_stats.xent())
+        print('Validation kl: %g' % valid_stats.kl())
+        print('Validation accuracy: %g' % valid_stats.accuracy())
+        return 0
+
+
     print('\nStart training...')
     print(' * number of epochs: %d, starting from Epoch %d' %
           (opt.epochs + 1 - opt.start_epoch, opt.start_epoch))
@@ -255,7 +269,10 @@ def train_model(model, fields, optim, data_type, model_opt):
         train_iter = make_dataset_iter(lazily_load_dataset("train"),
                                        fields, opt)
         train_stats = trainer.train(train_iter, epoch, report_func)
+        print('Train exp(elbo): %g' % train_stats.expelbo())
         print('Train perplexity: %g' % train_stats.ppl())
+        print('Train xent: %g' % train_stats.xent())
+        print('Train kl: %g' % train_stats.kl())
         print('Train accuracy: %g' % train_stats.accuracy())
 
         # 2. Validate on the validation set.
@@ -263,7 +280,10 @@ def train_model(model, fields, optim, data_type, model_opt):
                                        fields, opt,
                                        is_train=False)
         valid_stats = trainer.validate(valid_iter)
+        print('Validation exp(elbo): %g' % valid_stats.expelbo())
         print('Validation perplexity: %g' % valid_stats.ppl())
+        print('Validation xent: %g' % valid_stats.xent())
+        print('Validation kl: %g' % valid_stats.kl())
         print('Validation accuracy: %g' % valid_stats.accuracy())
 
         # 3. Log to remote server.
@@ -470,6 +490,9 @@ def main():
     else:
         checkpoint = None
         model_opt = opt
+
+    for k, v in vars(model_opt).items():
+        print("{}: {}".format(k, v))
 
     # Peek the fisrt dataset to determine the data_type.
     # (All datasets have the same data_type).

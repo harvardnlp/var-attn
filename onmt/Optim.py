@@ -52,6 +52,7 @@ class Optim(object):
                  warmup_steps=4000,
                  model_size=None):
         self.last_ppl = None
+        self.best_ppl = None
         self.lr = lr
         self.original_lr = lr
         self.max_grad_norm = max_grad_norm
@@ -130,7 +131,16 @@ class Optim(object):
         Decay learning rate if val perf does not improve
         or we hit the start_decay_at limit.
         """
+        if self.best_ppl is not None:
+            if ppl > self.best_ppl:
+                if epoch >= self.start_decay_at:
+                    self.lr = self.lr * self.lr_decay
+            else:
+                self.best_ppl = ppl
+        else:
+            self.best_ppl = ppl
 
+        """
         if self.start_decay_at is not None and epoch >= self.start_decay_at:
             self.start_decay = True
         if self.last_ppl is not None and ppl > self.last_ppl:
@@ -139,7 +149,8 @@ class Optim(object):
         if self.start_decay:
             self.lr = self.lr * self.lr_decay
             print("Decaying learning rate to %g" % self.lr)
-
+        """
         self.last_ppl = ppl
         if self.method != 'sparseadam':
             self.optimizer.param_groups[0]['lr'] = self.lr
+

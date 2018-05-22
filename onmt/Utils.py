@@ -1,4 +1,12 @@
+from collections import namedtuple
+
 import torch
+
+
+Params = namedtuple("Params", ["alpha", "mu", "sigma", "dist_type", "samples"])
+Params.__new__.__defaults__ = (None,) * len(Params._fields)
+
+DistInfo = namedtuple("DistInfo", ["p", "q"])
 
 
 def aeq(*args):
@@ -26,3 +34,4 @@ def sequence_mask(lengths, max_len=None):
 def use_gpu(opt):
     return (hasattr(opt, 'gpuid') and len(opt.gpuid) > 0) or \
         (hasattr(opt, 'gpu') and opt.gpu > -1)
+

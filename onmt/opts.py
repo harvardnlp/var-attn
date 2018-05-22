@@ -60,7 +60,6 @@ def model_opts(parser):
                        help="""Type of decoder layer to use. Non-RNN layers
                        are experimental. Options are
                        [rnn|transformer|cnn].""")
-
     group.add_argument('-layers', type=int, default=-1,
                        help='Number of layers in enc/dec.')
     group.add_argument('-enc_layers', type=int, default=2,
@@ -98,6 +97,79 @@ def model_opts(parser):
                        help="""Type of context gate to use.
                        Do not select for no context gate.""")
 
+    # Inference Network options
+    group = parser.add_argument_group('Inference Network')
+    group.add_argument("-inference_network_normalization", default="none",
+                       choices=["none", "bn"],
+                       help="""Normalization type in the inference network.
+                       """)
+    group.add_argument("-freeze_generative_model", type=int, default=0,
+                       help="""Freeze the generative model, except the attn prior.
+                       """)
+    group.add_argument("-use_generative_model", type=int, default=0,
+                       help="""Use the generative model, namely the attn prior,
+                       instead of the inference network for the attention.
+                       """)
+    group.add_argument("-p_input_feed", type=str, default="mean",
+                       choices=["q", "p", "p_mean"],
+                       help="""Always perform input feeding with the prior P
+                       rather than approximate posterior Q even during training.
+                       """)
+    group.add_argument("-mode", type=str, default="sample",
+                       choices=["sample", "enum"],
+                       help="""Sample or enumerate.
+                       """)
+    group.add_argument("-n_samples", type=int, default=1,
+                       help="""Number of samples to estimate log marginal.
+                       """)
+    group.add_argument("-alpha_transformation", type=str, default="exp",
+                       choices=["softplus", "exp", "relu", "sm"],
+                       help="""Transformation used to parameterize Dirichlet.
+                       """)
+    group.add_argument("-min_clamp_val", type=float, default=1e-2,
+                       help="""Use the generative model, namely the attn prior,
+                       instead of the inference network for the attention.
+                       """)
+    group.add_argument("-p_dist_type", type=str, default="dirichlet",
+                        choices=["log_normal", "dirichlet", "none"],
+                        help="""q and p_a distribution type.
+                        If 'none', then uses a softmax over scores.
+                        """)
+    group.add_argument("-q_attn_type", type=str, default="general",
+                        choices=["dot", "general", "mlp"],
+                        help="""q and p_a distribution type.
+                        If 'none', then uses a softmax over scores.
+                        """)
+    group.add_argument("-q_dist_type", type=str, default="dirichlet",
+                        choices=["log_normal", "dirichlet", "none"],
+                        help="""q and p_a distribution type.
+                        If 'none', then uses a softmax over scores.
+                        """)
+    group.add_argument("-dbg_inf", type=int, default=0,
+                    help="""Feed dbg flag to inference network.
+                    """)
+    group.add_argument('-inference_network_type', type=str, default='none',
+                       choices=['rnn', 'brnn', 'embedding_only', 'none'],
+                       help="""Type of inference network to use.
+                       Options are
+                       [rnn|brnn|embedding_only].""")
+    group.add_argument('-inference_network_share_embeddings', type=int, default=1,
+                       help="""Use src/tgt word embeddings for inference network.""")
+    group.add_argument('-inference_network_src_word_vec_size', type=int, default=500,
+                       help="""Inference network src word vec size.""")
+    group.add_argument('-inference_network_tgt_word_vec_size', type=int, default=500,
+                       help="""Inference network tgt word vec size.""")
+    group.add_argument('-inference_network_dropout', type=int, default=0.3,
+                       help="""Inference network dropout.""")
+    group.add_argument('-inference_network_src_layers', type=int, default=2,
+                       help='Number of layers in the inference network src RNN')
+    group.add_argument('-inference_network_tgt_layers', type=int, default=2,
+                       help='Number of layers in the inference network tgt RNN')
+    group.add_argument('-inference_network_rnn_size', type=int, default=500,
+                       help='Size of rnn hidden states in the inference network RNN')
+    group.add_argument('-inference_network_natural_gradient', type=int, default=0,
+                       help='Size of rnn hidden states in the inference network RNN')
+
     # Attention options
     group = parser.add_argument_group('Model- Attention')
     group.add_argument('-global_attention', type=str, default='general',
@@ -118,6 +190,10 @@ def model_opts(parser):
                        help='Train a coverage attention layer.')
     group.add_argument('-lambda_coverage', type=float, default=1,
                        help='Lambda value for coverage.')
+    group.add_argument('-metric', type=str, default='ppl',
+                       choices=['ppl', 'xent_p', 'pppl', 'xent'],
+                       help="""The metric to use to determine lr annealing:
+                       ppl, xent_p, pppl, or xent""")
 
 
 def preprocess_opts(parser):
@@ -152,12 +228,10 @@ def preprocess_opts(parser):
     # Dictionary options, for text corpus
 
     group = parser.add_argument_group('Vocab')
-    group.add_argument('-src_vocab', default="",
-                       help="""Path to an existing source vocabulary. Format:
-                       one word per line.""")
-    group.add_argument('-tgt_vocab', default="",
-                       help="""Path to an existing target vocabulary. Format:
-                       one word per line.""")
+    group.add_argument('-src_vocab',
+                       help="Path to an existing source vocabulary")
+    group.add_argument('-tgt_vocab',
+                       help="Path to an existing target vocabulary")
     group.add_argument('-features_vocabs_prefix', type=str, default='',
                        help="Path prefix to existing features vocabularies")
     group.add_argument('-src_vocab_size', type=int, default=50000,
@@ -212,6 +286,7 @@ def train_opts(parser):
     # Model loading/saving options
 
     group = parser.add_argument_group('General')
+    group.add_argument("-eval_only", type=int, default=0, help="Evaluation only.")
     group.add_argument('-data', required=True,
                        help="""Path prefix to the ".train.pt" and
                        ".valid.pt" file path from preprocess.py""")
@@ -242,6 +317,11 @@ def train_opts(parser):
 
     group.add_argument('-train_from', default='', type=str,
                        help="""If training from a checkpoint then this is the
+                       path to the pretrained model's state_dict.""")
+
+    group.add_argument('-init_with', default='', type=str,
+                       help="""If initializing a variational model
+                       from a checkpoint then this is the
                        path to the pretrained model's state_dict.""")
 
     # Pretrained word vectors
@@ -280,7 +360,8 @@ def train_opts(parser):
     group.add_argument('-valid_batch_size', type=int, default=32,
                        help='Maximum batch size for validation')
     group.add_argument('-max_generator_batches', type=int, default=32,
-                       help="""Maximum batches of words in a sequence to run
+                       help="""Maximum batches ds stra sequence to r"mean"n
+                       choices=["q", "p", "p_mean"],
                         the generator on in parallel. Higher is faster, but
                         uses more memory.""")
     group.add_argument('-epochs', type=int, default=13,
@@ -327,6 +408,21 @@ def train_opts(parser):
                        Set to zero to turn off label smoothing.
                        For more detailed information, see:
                        https://arxiv.org/abs/1512.00567""")
+    group.add_argument("-q_warmup_start", type=float, default=0.,
+                    help="""Number of warmup steps
+                    """)
+    group.add_argument("-q_warmup_steps", type=int, default=0,
+                    help="""Number of warmup steps
+                    """)
+    group.add_argument("-sample_kl", type=int, default=0,
+                    help="""Use sample instead of analytic KL.
+                    """)
+    group.add_argument("-detach_p_kl", type=int, default=0,
+                    help="""Use KL(Q || P.detach()).
+                    """)
+    group.add_argument("-ignore_kl", type=int, default=0,
+                    help="""Do not backprop through KL.
+                    """)
     # learning rate
     group = parser.add_argument_group('Optimization- Rate')
     group.add_argument('-learning_rate', type=float, default=1.0,

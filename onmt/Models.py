@@ -605,10 +605,22 @@ class DecoderState(object):
 
     Modules need to implement this to utilize beam search decoding.
     """
+    """
     def detach(self):
         for h in self._all:
             if h is not None:
                 h.detach_()
+    """
+    def detach(self):
+        def det(h):
+            if h is not None:
+                return h.detach()
+        return self.__new__(
+            type(self),
+            det(self.input_feed),
+            self.hidden_size,
+            tuple(det(x) for x in self.hidden),
+        )
 
     def beam_update(self, idx, positions, beam_size):
         for e in self._all:
@@ -640,6 +652,7 @@ class RNNDecoderState(DecoderState):
         else:
             self.hidden = rnnstate
         self.coverage = None
+        self.hidden_size = hidden_size
 
         # Init the input feed.
         batch_size = self.hidden[0].size(1)
@@ -665,3 +678,28 @@ class RNNDecoderState(DecoderState):
                 for e in self._all]
         self.hidden = tuple(vars[:-1])
         self.input_feed = vars[-1]
+
+
+class Generator(nn.Module):
+    def __init__(self, in_dim, out_dim):
+        super(Generator, self).__init__()
+        self.proj = nn.Linear(in_dim, out_dim)
+
+    def logsumexp(self, x, dim=0, keepdim=False):
+        m = x.max(dim)[0]
+        if keepdim:
+            m = m.unsqueeze(dim)
+            return m + (x-m).exp().sum(dim, keepdim=keepdim).log()
+        else:
+            return m + (x-m.unsqueeze(dim)).exp().sum(dim, keepdim=keepdim).log()
+
+    def forward(self, input):
+        assert input.dim() == 4, "Need T x K x N x H"
+        scores = self.proj(input)
+        if scores.size(1) == 1:
+            scores = scores.squeeze(1)
+        else:
+            scores = self.logsumexp(scores, dim=1, keepdim=False)
+
+        return F.log_softmax(scores, dim=-1)
+

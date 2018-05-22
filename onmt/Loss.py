@@ -12,6 +12,9 @@ from torch.autograd import Variable
 import onmt
 import onmt.io
 
+from torch.distributions import Dirichlet as Dir
+from torch.distributions.kl import kl_divergence
+
 
 class LossComputeBase(nn.Module):
     """
@@ -65,7 +68,7 @@ class LossComputeBase(nn.Module):
         """
         return NotImplementedError
 
-    def monolithic_compute_loss(self, batch, output, attns):
+    def monolithic_compute_loss(self, batch, output, attns, dist_info=None):
         """
         Compute the forward loss for the batch.
 
@@ -80,14 +83,14 @@ class LossComputeBase(nn.Module):
             :obj:`onmt.Statistics`: loss statistics
         """
         range_ = (0, batch.tgt.size(0))
-        shard_state = self._make_shard_state(batch, output, range_, attns)
+        shard_state = self._make_shard_state(batch, output, range_, attns, dist_info=dist_info)
         _, batch_stats = self._compute_loss(batch, **shard_state)
 
         return batch_stats
 
     def sharded_compute_loss(self, batch, output, attns,
                              cur_trunc, trunc_size, shard_size,
-                             normalization):
+                             normalization, dist_info=None):
         """Compute the forward loss and backpropagate.  Computation is done
         with shards and optionally truncation for memory efficiency.
 
@@ -117,16 +120,16 @@ class LossComputeBase(nn.Module):
         """
         batch_stats = onmt.Statistics()
         range_ = (cur_trunc, cur_trunc + trunc_size)
-        shard_state = self._make_shard_state(batch, output, range_, attns)
+        shard_state = self._make_shard_state(batch, output, range_, attns, dist_info=dist_info)
 
         for shard in shards(shard_state, shard_size):
             loss, stats = self._compute_loss(batch, **shard)
-            loss.div(normalization).backward()
+            loss.div(normalization).backward(retain_graph=True)
             batch_stats.update(stats)
 
         return batch_stats
 
-    def _stats(self, loss, scores, target):
+    def _stats(self, xent, kl, scores, target):
         """
         Args:
             loss (:obj:`FloatTensor`): the loss computed by the loss criterion.
@@ -141,7 +144,7 @@ class LossComputeBase(nn.Module):
         num_correct = pred.eq(target) \
                           .masked_select(non_padding) \
                           .sum()
-        return onmt.Statistics(loss[0], non_padding.sum(), num_correct)
+        return onmt.Statistics(xent.item(), kl.item(), non_padding.sum().item(), num_correct.item())
 
     def _bottle(self, v):
         return v.view(-1, v.size(2))
@@ -175,15 +178,39 @@ class NMTLossCompute(LossComputeBase):
             weight[self.padding_idx] = 0
             self.criterion = nn.NLLLoss(weight, size_average=False)
         self.confidence = 1.0 - label_smoothing
+        self.alpha = 1
 
-    def _make_shard_state(self, batch, output, range_, attns=None):
-        return {
+    def _make_shard_state(self, batch, output, range_, attns=None, dist_info=None):
+        state = {
             "output": output,
             "target": batch.tgt[range_[0] + 1: range_[1]],
         }
 
-    def _compute_loss(self, batch, output, target):
-        scores = self.generator(self._bottle(output))
+        # whoops, maybe I need to make everything T first?
+        if dist_info.p is not None:
+            state["p_samples"] = dist_info.p.samples
+            if dist_info.p.dist_type == "dirichlet":
+                state["p_alpha"] = dist_info.p.alpha
+            else:
+                raise Exception("Unimplemented distribution")
+
+        if dist_info.q is not None:
+            state["q_samples"] = dist_info.q.samples
+            if dist_info.q.dist_type == "dirichlet":
+                state["q_alpha"] = dist_info.q.alpha
+            else:
+                raise Exception("Unimplemented distribution")
+
+        return state
+
+    def _compute_loss(
+        self, batch, output, target,
+        p_samples=None, q_samples=None,
+        p_alpha=None, q_alpha=None,
+    ):
+        # Reconstruction
+        scores = self.generator(output)
+        scores = scores.view(-1, scores.size(-1))
 
         gtruth = target.view(-1)
         if self.confidence < 1:
@@ -196,15 +223,29 @@ class NMTLossCompute(LossComputeBase):
                 log_likelihood.index_fill_(0, mask, 0)
                 tmp_.index_fill_(0, mask, 0)
             gtruth = Variable(tmp_, requires_grad=False)
-        loss = self.criterion(scores, gtruth)
+
+        xent = self.criterion(scores, gtruth)
         if self.confidence < 1:
             # Default: report smoothed ppl.
             # loss_data = -log_likelihood.sum(0)
-            loss_data = loss.data.clone()
+            xent_data = xent.data.clone()
         else:
-            loss_data = loss.data.clone()
+            xent_data = xent.data.clone()
 
-        stats = self._stats(loss_data, scores.data, target.view(-1).data)
+        # KL
+        if q_alpha is not None:
+            q = Dir(q_alpha)
+            p = Dir(p_alpha)
+            kl = kl_divergence(q, p).sum()
+            loss = xent + self.alpha * kl
+        else:
+            kl = torch.zeros(1).to(xent)
+            loss = xent
+        #import pdb; pdb.set_trace()
+
+        kl_data = kl.data.clone()
+
+        stats = self._stats(xent_data, kl_data, scores.data, target.view(-1).data)
 
         return loss, stats
 
