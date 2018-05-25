@@ -681,9 +681,10 @@ class RNNDecoderState(DecoderState):
 
 
 class Generator(nn.Module):
-    def __init__(self, in_dim, out_dim):
+    def __init__(self, in_dim, out_dim, mode="sample"):
         super(Generator, self).__init__()
         self.proj = nn.Linear(in_dim, out_dim)
+        self.mode = mode
 
     def logsumexp(self, x, dim=0, keepdim=False):
         m = x.max(dim)[0]

@@ -233,27 +233,28 @@ class Trainer(object):
 
         stats = Statistics()
 
-        for batch in valid_iter:
-            cur_dataset = valid_iter.get_cur_dataset()
-            self.valid_loss.cur_dataset = cur_dataset
+        with torch.no_grad():
+            for batch in valid_iter:
+                cur_dataset = valid_iter.get_cur_dataset()
+                self.valid_loss.cur_dataset = cur_dataset
 
-            src = onmt.io.make_features(batch, 'src', self.data_type)
-            if self.data_type == 'text':
-                _, src_lengths = batch.src
-            else:
-                src_lengths = None
+                src = onmt.io.make_features(batch, 'src', self.data_type)
+                if self.data_type == 'text':
+                    _, src_lengths = batch.src
+                else:
+                    src_lengths = None
 
-            tgt = onmt.io.make_features(batch, 'tgt')
+                tgt = onmt.io.make_features(batch, 'tgt')
 
-            # F-prop through the model.
-            outputs, attns, _, dist_info = self.model(src, tgt, src_lengths)
+                # F-prop through the model.
+                outputs, attns, _, dist_info = self.model(src, tgt, src_lengths)
 
-            # Compute loss.
-            batch_stats = self.valid_loss.monolithic_compute_loss(
-                    batch, outputs, attns, dist_info=dist_info)
+                # Compute loss.
+                batch_stats = self.valid_loss.monolithic_compute_loss(
+                        batch, outputs, attns, dist_info=dist_info)
 
-            # Update statistics.
-            stats.update(batch_stats)
+                # Update statistics.
+                stats.update(batch_stats)
 
         # Set model back to training mode.
         self.model.train()

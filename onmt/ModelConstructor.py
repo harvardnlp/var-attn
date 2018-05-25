@@ -306,7 +306,11 @@ def make_base_model(model_opt, fields, gpu, checkpoint=None):
             nn.Linear(model_opt.rnn_size, len(fields["tgt"].vocab)),
             nn.LogSoftmax(dim=1))
         """
-        generator = Generator(model_opt.rnn_size, len(fields["tgt"].vocab))
+        generator = Generator(
+            in_dim = model_opt.rnn_size,
+            out_dim = len(fields["tgt"].vocab),
+            mode = model_opt.mode,
+        )
         if model_opt.share_decoder_embeddings:
             generator[0].weight = decoder.embeddings.word_lut.weight
     else:
