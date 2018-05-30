@@ -487,6 +487,11 @@ def main():
         model_opt = checkpoint['opt']
         # I don't like reassigning attributes of opt: it's not clear.
         opt.start_epoch = checkpoint['epoch'] + 1
+    elif opt.init_with:
+        print('Loading checkpoint from %s' % opt.init_with)
+        checkpoint = torch.load(opt.init_with,
+                                map_location=lambda storage, loc: storage)
+        model_opt = opt
     else:
         checkpoint = None
         model_opt = opt
