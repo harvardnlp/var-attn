@@ -38,6 +38,8 @@ class InferenceNetwork(nn.Module):
         elif dist_type == "dirichlet":
             #self.mask_val = 1e-2
             self.mask_val = math.exp(-10)
+        elif dist_type == "categorical":
+            self.mask_val = -float('inf')
         else:
             raise Exception("IDK")
 
@@ -67,6 +69,13 @@ class InferenceNetwork(nn.Module):
             self.var_out  = nn.Linear(100, 1)
             self.softplus = nn.Softplus()
         elif self.dist_type == "dirichlet":
+            if self.normalization == "none":
+                self.bn_alpha = None
+            elif self.normalization == "bn":
+                self.bn_alpha = nn.BatchNorm1d(1, affine=False)
+            else:
+                raise Exception("Invalid normalization type")
+        elif self.dist_type == "categorical":
             if self.normalization == "none":
                 self.bn_alpha = None
             elif self.normalization == "bn":
@@ -134,6 +143,30 @@ class InferenceNetwork(nn.Module):
 
             scores = Params(
                 alpha=scores,
+                dist_type=self.dist_type,
+            )
+        assert (self.dist_type == 'categorical')
+        if self.dist_type == "categorical":
+            scores = torch.bmm(tgt_memory_bank, src_memory_bank)
+            # mask source attention
+            assert (self.mask_val == -float('inf'))
+            if src_lengths is not None:
+                mask = sequence_mask(src_lengths)
+                mask = mask.unsqueeze(1)
+                scores.data.masked_fill_(1-mask, self.mask_val)
+            # scoresF should be softmax
+            log_scores = F.log_softmax(scores, dim=-1)
+            scores = self.scoresF(scores)
+
+            assert (self.bn_alpha is None)
+
+            # Make scores : T x N x S
+            scores = scores.transpose(0, 1)
+            log_scores = log_scores.transpose(0, 1)
+
+            scores = Params(
+                alpha=scores,
+                log_alpha=log_scores,
                 dist_type=self.dist_type,
             )
         elif self.dist_type == "log_normal":
@@ -224,6 +257,7 @@ class ViRNNDecoder(InputFeedRNNDecoder):
 
         # Initialize local and return variables.
         decoder_outputs = []
+        decoder_outputs_baseline = []
         dist_infos = []
         attns = {"std": []}
         if q_scores is not None:
@@ -254,6 +288,7 @@ class ViRNNDecoder(InputFeedRNNDecoder):
                 # map over tensor-like keys
                 q_scores_i = Params(
                     alpha=q_scores.alpha[i],
+                    log_alpha=q_scores.log_alpha[i],
                     dist_type=q_scores.dist_type,
                 )
             else:
@@ -281,6 +316,7 @@ class ViRNNDecoder(InputFeedRNNDecoder):
             # decoder_output_y : K x N x H
 
             decoder_outputs += [decoder_output_y]
+            decoder_outputs_baseline += [decoder_output_c]
             attns["std"] += [attn_c]
             if q_scores is not None:
                 attns["q"] += [q_scores.alpha[i]]
@@ -304,6 +340,8 @@ class ViRNNDecoder(InputFeedRNNDecoder):
             dist_type = q_scores.dist_type,
             samples = torch.stack([d.q.samples for d in dist_infos], dim=0)
                 if dist_infos[0].q.samples is not None else None,
+            sample_log_probs = torch.stack([d.q.sample_log_probs for d in dist_infos], dim=0)
+                if dist_infos[0].q.sample_log_probs is not None else None,
         ) if q_scores is not None else None
         p_info = Params(
             alpha = torch.stack([d.p.alpha for d in dist_infos], dim=0),
@@ -316,7 +354,7 @@ class ViRNNDecoder(InputFeedRNNDecoder):
             p=p_info,
         )
 
-        return hidden, decoder_outputs, attns, dist_info
+        return hidden, decoder_outputs, attns, dist_info, decoder_outputs_baseline
 
     def forward(self, tgt, memory_bank, state, memory_lengths=None, q_scores=None):
         """
@@ -345,7 +383,7 @@ class ViRNNDecoder(InputFeedRNNDecoder):
         # END
 
         # Run the forward pass of the RNN.
-        decoder_final, decoder_outputs, attns, dist_info = self._run_forward_pass(
+        decoder_final, decoder_outputs, attns, dist_info, decoder_outputs_baseline = self._run_forward_pass(
             tgt, memory_bank, state, memory_lengths=memory_lengths,
             q_scores=q_scores)
 
@@ -359,10 +397,11 @@ class ViRNNDecoder(InputFeedRNNDecoder):
         # Concatenates sequence of tensors along a new dimension.
         # T x K x N x H
         decoder_outputs = torch.stack(decoder_outputs, dim=0)
+        decoder_outputs_baseline = torch.stack(decoder_outputs_baseline, dim=0)
         for k in attns:
             attns[k] = torch.stack(attns[k])
 
-        return decoder_outputs, state, attns, dist_info
+        return decoder_outputs, state, attns, dist_info, decoder_outputs_baseline
 
     def _build_rnn(self, rnn_type, input_size,
                    hidden_size, num_layers, dropout):
@@ -470,7 +509,7 @@ class ViNMTModel(nn.Module):
         else:
             q_scores = None
 
-        decoder_outputs, dec_state, attns, dist_info = \
+        decoder_outputs, dec_state, attns, dist_info, decoder_outputs_baseline = \
             self.decoder(tgt, memory_bank,
                          enc_state if dec_state is None
                          else dec_state,
@@ -482,6 +521,6 @@ class ViNMTModel(nn.Module):
             dec_state = None
             attns = None
 
-        return decoder_outputs, attns, dec_state, dist_info
+        return decoder_outputs, attns, dec_state, dist_info, decoder_outputs_baseline
         # p_a_scores: feed in sampled a, output unormalized attention scores
         # # (batch_size, tgt_length, src_length)

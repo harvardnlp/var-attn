@@ -98,7 +98,7 @@ class VariationalAttention(nn.Module):
         out_bias = False
         self.linear_out = nn.Linear(dim*2, dim, bias=out_bias)
 
-        self.sm = nn.Softmax(dim=1)
+        self.sm = nn.Softmax(dim=-1)
         self.tanh = nn.Tanh()
 
     def score(self, h_t, h_s):
@@ -194,7 +194,26 @@ class VariationalAttention(nn.Module):
             # fill in zeros?
             attns.data.masked_fill_(1-mask.unsqueeze(0), 0)
         elif dist_type == "categorical":
-            pass
+            alpha = params.alpha
+            log_alpha = params.log_alpha
+            K = n_samples
+            N = alpha.size(0)
+            T = alpha.size(1)
+            S = alpha.size(2)
+            attns_id = torch.distributions.categorical.Categorical(
+               params.alpha.cpu().view(N*T, S)
+            ).sample(
+                torch.Size([n_samples])
+            ).view(K, N, T, 1)
+            attns = torch.Tensor(K, N, T, S).zero_()
+            attns.scatter_(3, attns_id, 1)
+            attns = attns.to(params.alpha)
+            # fill in zeros?
+            #attns.data.masked_fill_(1-mask.unsqueeze(0), 0)
+            # log alpha: K, N, T, S
+            log_alpha = log_alpha.unsqueeze(0).expand(K, N, T, S)
+            sample_log_probs = log_alpha.gather(3, attns_id.to(log_alpha.device)).squeeze(3)
+            return attns, sample_log_probs
         elif dist_type == "none":
             pass
         else:
@@ -229,6 +248,7 @@ class VariationalAttention(nn.Module):
                 if q_scores.alpha is not None:
                     q_scores = Params(
                         alpha=q_scores.alpha.unsqueeze(1),
+                        log_alpha=q_scores.log_alpha.unsqueeze(1),
                         dist_type=q_scores.dist_type,
                     )
         else:
@@ -242,7 +262,7 @@ class VariationalAttention(nn.Module):
 
         # compute attention scores, as in Luong et al.
         #align = self.score(input, memory_bank)
-
+        assert (self.p_dist_type == 'categorical')
         # Softmax to normalize attention weights
         # Params should be T x N x S
         if self.p_dist_type == "dirichlet":
@@ -272,13 +292,13 @@ class VariationalAttention(nn.Module):
                 # mask : N x T x S
                 mask = sequence_mask(memory_lengths)
                 mask = mask.unsqueeze(1)  # Make it broadcastable.
-                align.data.masked_fill_(1 - mask, -float('inf'))
-            align_vectors = self.sm(align, dim=-1)
+                scores.data.masked_fill_(1 - mask, -float('inf'))
+            scores = self.sm(scores)
 
-            c_align_vectors = align_vectors
+            c_align_vectors = scores
 
             p_scores = Params(
-                alpha=align_vectors.transpose(0, 1),
+                alpha=scores,
                 dist_type=self.p_dist_type,
             )
 
@@ -295,14 +315,20 @@ class VariationalAttention(nn.Module):
         # y_align_vectors: K x N x T x S
         q_sample, p_sample = None, None
         if q_scores is None or self.use_prior:
+            assert (False)
             p_sample = self.sample_attn(
                 p_scores, n_samples=self.n_samples, mode=self.mode,
                 lengths=memory_lengths, mask=mask if memory_lengths is not None else None)
             y_align_vectors = p_sample
         else:
-            q_sample = self.sample_attn(
-                q_scores, n_samples=self.n_samples, mode=self.mode,
-                lengths=memory_lengths, mask=mask if memory_lengths is not None else None)
+            if q_scores.dist_type == 'categorical':
+                q_sample, sample_log_probs = self.sample_attn(
+                    q_scores, n_samples=self.n_samples, mode=self.mode,
+                    lengths=memory_lengths, mask=mask if memory_lengths is not None else None)
+            else:
+                q_sample = self.sample_attn(
+                    q_scores, n_samples=self.n_samples, mode=self.mode,
+                    lengths=memory_lengths, mask=mask if memory_lengths is not None else None)
             y_align_vectors = q_sample
         """
         # Data should not be K x N x T x S
@@ -335,6 +361,7 @@ class VariationalAttention(nn.Module):
                 alpha = q_scores.alpha.squeeze(1) if q_scores.alpha is not None else None,
                 dist_type = q_scores.dist_type,
                 samples = q_sample.squeeze(2) if q_sample is not None else None,
+                sample_log_probs = sample_log_probs.squeeze(2) if sample_log_probs is not None else None,
             ) if q_scores is not None else None
             p_scores = Params(
                 alpha = p_scores.alpha.squeeze(1),
@@ -350,6 +377,7 @@ class VariationalAttention(nn.Module):
             aeq(batch, batch_)
             aeq(sourceL, sourceL_)
         else:
+            assert (False)
             # T x N x H
             h_c = h_c.transpose(0, 1).contiguous()
             # T x N x S

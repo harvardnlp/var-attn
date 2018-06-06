@@ -131,7 +131,7 @@ def model_opts(parser):
                        instead of the inference network for the attention.
                        """)
     group.add_argument("-p_dist_type", type=str, default="dirichlet",
-                        choices=["log_normal", "dirichlet", "none"],
+                        choices=["log_normal", "dirichlet", "categorical", "none"],
                         help="""q and p_a distribution type.
                         If 'none', then uses a softmax over scores.
                         """)
@@ -141,7 +141,7 @@ def model_opts(parser):
                         If 'none', then uses a softmax over scores.
                         """)
     group.add_argument("-q_dist_type", type=str, default="dirichlet",
-                        choices=["log_normal", "dirichlet", "none"],
+                        choices=["log_normal", "dirichlet", "categorical", "none"],
                         help="""q and p_a distribution type.
                         If 'none', then uses a softmax over scores.
                         """)

@@ -13,6 +13,7 @@ import onmt
 import onmt.io
 
 from torch.distributions import Dirichlet as Dir
+from torch.distributions.categorical import Categorical as Cat
 from torch.distributions.kl import kl_divergence
 
 
@@ -68,7 +69,7 @@ class LossComputeBase(nn.Module):
         """
         return NotImplementedError
 
-    def monolithic_compute_loss(self, batch, output, attns, dist_info=None):
+    def monolithic_compute_loss(self, batch, output, attns, dist_info=None, output_baseline=None):
         """
         Compute the forward loss for the batch.
 
@@ -82,15 +83,19 @@ class LossComputeBase(nn.Module):
         Returns:
             :obj:`onmt.Statistics`: loss statistics
         """
+        if dist_info is not None:
+            assert (dist_info.p.dist_type == dist_info.q.dist_type)
+            self.dist_type = dist_info.q.dist_type
         range_ = (0, batch.tgt.size(0))
-        shard_state = self._make_shard_state(batch, output, range_, attns, dist_info=dist_info)
+        shard_state = self._make_shard_state(batch, output, range_, attns, dist_info=dist_info, output_baseline=output_baseline)
         _, batch_stats = self._compute_loss(batch, **shard_state)
 
         return batch_stats
 
     def sharded_compute_loss(self, batch, output, attns,
                              cur_trunc, trunc_size, shard_size,
-                             normalization, dist_info=None):
+                             normalization, dist_info=None,
+                             output_baseline=None):
         """Compute the forward loss and backpropagate.  Computation is done
         with shards and optionally truncation for memory efficiency.
 
@@ -120,7 +125,10 @@ class LossComputeBase(nn.Module):
         """
         batch_stats = onmt.Statistics()
         range_ = (cur_trunc, cur_trunc + trunc_size)
-        shard_state = self._make_shard_state(batch, output, range_, attns, dist_info=dist_info)
+        shard_state = self._make_shard_state(batch, output, range_, attns, dist_info=dist_info, output_baseline=output_baseline)
+        if dist_info is not None:
+            assert (dist_info.p.dist_type == dist_info.q.dist_type)
+            self.dist_type = dist_info.q.dist_type
 
         for shard in shards(shard_state, shard_size):
             loss, stats = self._compute_loss(batch, **shard)
@@ -180,7 +188,8 @@ class NMTLossCompute(LossComputeBase):
         self.confidence = 1.0 - label_smoothing
         self.alpha = 1
 
-    def _make_shard_state(self, batch, output, range_, attns=None, dist_info=None):
+    def _make_shard_state(self, batch, output, range_, attns=None,
+                          dist_info=None, output_baseline=None):
         state = {
             "output": output,
             "target": batch.tgt[range_[0] + 1: range_[1]],
@@ -191,6 +200,8 @@ class NMTLossCompute(LossComputeBase):
             state["p_samples"] = dist_info.p.samples
             if dist_info.p.dist_type == "dirichlet":
                 state["p_alpha"] = dist_info.p.alpha
+            elif dist_info.p.dist_type == "categorical":
+                state["p_alpha"] = dist_info.p.alpha
             else:
                 raise Exception("Unimplemented distribution")
 
@@ -198,19 +209,31 @@ class NMTLossCompute(LossComputeBase):
             state["q_samples"] = dist_info.q.samples
             if dist_info.q.dist_type == "dirichlet":
                 state["q_alpha"] = dist_info.q.alpha
+            elif dist_info.q.dist_type == "categorical":
+                state["q_alpha"] = dist_info.q.alpha
+                state["q_sample_log_probs"] = dist_info.q.sample_log_probs
             else:
                 raise Exception("Unimplemented distribution")
 
+        assert output_baseline is not None
+        if output_baseline is not None:
+            state["output_baseline"] = output_baseline
         return state
 
     def _compute_loss(
         self, batch, output, target,
         p_samples=None, q_samples=None,
         p_alpha=None, q_alpha=None,
+        q_sample_log_probs=None,
+        output_baseline=None
     ):
         # Reconstruction
+        output_baseline = output_baseline.unsqueeze(1)
         scores = self.generator(output)
         scores = scores.view(-1, scores.size(-1))
+        scores_baseline = self.generator(output_baseline)
+        scores_baseline = scores_baseline.view(-1, scores.size(-1))
+
 
         gtruth = target.view(-1)
         if self.confidence < 1:
@@ -225,6 +248,14 @@ class NMTLossCompute(LossComputeBase):
             gtruth = Variable(tmp_, requires_grad=False)
 
         xent = self.criterion(scores, gtruth)
+        scores_nopad = scores[gtruth.ne(self.padding_idx)]
+        scores_baseline_nopad = scores_baseline[gtruth.ne(self.padding_idx)]
+        gtruth_nopad = gtruth[gtruth.ne(self.padding_idx)]
+        llh_ind = scores_nopad.gather(1, gtruth_nopad.unsqueeze(1))
+        llh_baseline_ind = scores_baseline_nopad.gather(1, gtruth_nopad.unsqueeze(1))
+        reward = (llh_ind.clone() - llh_baseline_ind.clone()).view(-1) # T*N
+        q_sample_log_probs = q_sample_log_probs.view(-1) # T, N
+        q_sample_log_probs = q_sample_log_probs[gtruth.ne(self.padding_idx)]
         if self.confidence < 1:
             # Default: report smoothed ppl.
             # loss_data = -log_likelihood.sum(0)
@@ -234,13 +265,25 @@ class NMTLossCompute(LossComputeBase):
 
         # KL
         if q_alpha is not None:
-            q = Dir(q_alpha)
-            p = Dir(p_alpha)
+            q_alpha = q_alpha.contiguous().view(-1, q_alpha.size(2))
+            q_alpha = q_alpha[gtruth.ne(self.padding_idx)]
+            p_alpha = p_alpha.contiguous().view(-1, p_alpha.size(2))
+            p_alpha = p_alpha[gtruth.ne(self.padding_idx)]
+            if self.dist_type == 'dirichlet':
+                q = Dir(q_alpha)
+                p = Dir(p_alpha)
+            elif self.dist_type == 'categorical':
+                q = Cat(q_alpha)
+                p = Cat(p_alpha)
+                #import pdb; pdb.set_trace()
+            else:
+                assert (False)
             kl = kl_divergence(q, p).sum()
             loss = xent + self.alpha * kl
         else:
             kl = torch.zeros(1).to(xent)
             loss = xent
+        loss = loss - (reward * q_sample_log_probs).sum()
         #import pdb; pdb.set_trace()
 
         kl_data = kl.data.clone()
