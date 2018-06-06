@@ -253,7 +253,7 @@ class NMTLossCompute(LossComputeBase):
         gtruth_nopad = gtruth[gtruth.ne(self.padding_idx)]
         llh_ind = scores_nopad.gather(1, gtruth_nopad.unsqueeze(1))
         llh_baseline_ind = scores_baseline_nopad.gather(1, gtruth_nopad.unsqueeze(1))
-        reward = (llh_ind.clone() - llh_baseline_ind.clone()).view(-1) # T*N
+        reward = (llh_ind.detach() - llh_baseline_ind.detach()).view(-1) # T*N
         q_sample_log_probs = q_sample_log_probs.view(-1) # T, N
         q_sample_log_probs = q_sample_log_probs[gtruth.ne(self.padding_idx)]
         if self.confidence < 1:
