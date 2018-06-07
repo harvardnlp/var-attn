@@ -694,15 +694,15 @@ class Generator(nn.Module):
         else:
             return m + (x-m.unsqueeze(dim)).exp().sum(dim, keepdim=keepdim).log()
 
-    def forward(self, input, pa=None):
+    def forward(self, input, log_pa=None):
         # log_pa: T x N x S=K
         assert input.dim() == 4, "Need T x K x N x H"
         scores = self.proj(input)
         if scores.size(1) == 1:
             scores = scores.squeeze(1)
         else:
-            if self.mode == "enum" and pa is not None:
-                scores = scores + pa.log().transpose(1,2).unsqueeze(-1)
+            if self.mode == "enum" and log_pa is not None:
+                scores = scores + log_pa.transpose(1,2).unsqueeze(-1)
             scores = self.logsumexp(scores, dim=1, keepdim=False)
         return F.log_softmax(scores, dim=-1)
 

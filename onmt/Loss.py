@@ -211,6 +211,7 @@ class NMTLossCompute(LossComputeBase):
                 state["q_alpha"] = dist_info.q.alpha
             elif dist_info.q.dist_type == "categorical":
                 state["q_alpha"] = dist_info.q.alpha
+                state["q_log_alpha"] = dist_info.q.log_alpha
                 state["q_sample_log_probs"] = dist_info.q.sample_log_probs
             else:
                 raise Exception("Unimplemented distribution")
@@ -224,13 +225,14 @@ class NMTLossCompute(LossComputeBase):
         self, batch, output, target,
         p_samples=None, q_samples=None,
         p_alpha=None, q_alpha=None,
+        q_log_alpha=None,
         q_sample_log_probs=None,
         output_baseline=None
     ):
         # Reconstruction
         output_baseline = output_baseline.unsqueeze(1)
         # TODO(jchiu): hacky, just use q for now, but switch on something later.
-        scores = self.generator(output, q_alpha)
+        scores = self.generator(output, q_log_alpha)
         scores = scores.view(-1, scores.size(-1))
         scores_baseline = self.generator(output_baseline)
         scores_baseline = scores_baseline.view(-1, scores.size(-1))
