@@ -229,7 +229,8 @@ class NMTLossCompute(LossComputeBase):
     ):
         # Reconstruction
         output_baseline = output_baseline.unsqueeze(1)
-        scores = self.generator(output)
+        # TODO(jchiu): hacky, just use q for now, but switch on something later.
+        scores = self.generator(output, q_alpha)
         scores = scores.view(-1, scores.size(-1))
         scores_baseline = self.generator(output_baseline)
         scores_baseline = scores_baseline.view(-1, scores.size(-1))
@@ -248,14 +249,16 @@ class NMTLossCompute(LossComputeBase):
             gtruth = Variable(tmp_, requires_grad=False)
 
         xent = self.criterion(scores, gtruth)
-        scores_nopad = scores[gtruth.ne(self.padding_idx)]
-        scores_baseline_nopad = scores_baseline[gtruth.ne(self.padding_idx)]
-        gtruth_nopad = gtruth[gtruth.ne(self.padding_idx)]
-        llh_ind = scores_nopad.gather(1, gtruth_nopad.unsqueeze(1))
-        llh_baseline_ind = scores_baseline_nopad.gather(1, gtruth_nopad.unsqueeze(1))
-        reward = (llh_ind.detach() - llh_baseline_ind.detach()).view(-1) # T*N
-        q_sample_log_probs = q_sample_log_probs.view(-1) # T, N
-        q_sample_log_probs = q_sample_log_probs[gtruth.ne(self.padding_idx)]
+
+        if q_sample_log_probs is not None:
+            scores_nopad = scores[gtruth.ne(self.padding_idx)]
+            scores_baseline_nopad = scores_baseline[gtruth.ne(self.padding_idx)]
+            gtruth_nopad = gtruth[gtruth.ne(self.padding_idx)]
+            llh_ind = scores_nopad.gather(1, gtruth_nopad.unsqueeze(1))
+            llh_baseline_ind = scores_baseline_nopad.gather(1, gtruth_nopad.unsqueeze(1))
+            reward = (llh_ind.detach() - llh_baseline_ind.detach()).view(-1) # T*N
+            q_sample_log_probs = q_sample_log_probs.view(-1) # T, N
+            q_sample_log_probs = q_sample_log_probs[gtruth.ne(self.padding_idx)]
         if self.confidence < 1:
             # Default: report smoothed ppl.
             # loss_data = -log_likelihood.sum(0)
@@ -283,7 +286,10 @@ class NMTLossCompute(LossComputeBase):
         else:
             kl = torch.zeros(1).to(xent)
             loss = xent
-        loss = loss - (reward * q_sample_log_probs).sum()
+
+        # subtract reward
+        if q_sample_log_probs is not None:
+            loss = loss - (reward * q_sample_log_probs).sum()
         #import pdb; pdb.set_trace()
 
         kl_data = kl.data.clone()

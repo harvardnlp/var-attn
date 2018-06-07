@@ -135,6 +135,7 @@ class Optim(object):
             if ppl > self.best_ppl:
                 if epoch >= self.start_decay_at:
                     self.lr = self.lr * self.lr_decay
+                    print("Decaying learning rate to %g" % self.lr)
             else:
                 self.best_ppl = ppl
         else:

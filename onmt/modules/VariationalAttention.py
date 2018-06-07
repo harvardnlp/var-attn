@@ -154,10 +154,8 @@ class VariationalAttention(nn.Module):
         h_var = h_var.view(tgt_batch, tgt_len, src_len)
         return [h_mean, h_var]
 
-    def sample_attn(self, params, n_samples=1, mode="sample", lengths=None, mask=None):
+    def sample_attn(self, params, n_samples=1, lengths=None, mask=None):
         dist_type = params.dist_type
-        if mode == "enum":
-            raise Exception("Unimplemented enum")
         if dist_type == "dirichlet":
             alpha = params.alpha
             K = n_samples
@@ -313,23 +311,26 @@ class VariationalAttention(nn.Module):
         # It's possible that I will actually want these samples...
         # If I need them, I need to pass them into dist_info.
         # y_align_vectors: K x N x T x S
-        q_sample, p_sample = None, None
-        if q_scores is None or self.use_prior:
-            assert (False)
-            p_sample = self.sample_attn(
-                p_scores, n_samples=self.n_samples, mode=self.mode,
-                lengths=memory_lengths, mask=mask if memory_lengths is not None else None)
-            y_align_vectors = p_sample
-        else:
-            if q_scores.dist_type == 'categorical':
-                q_sample, sample_log_probs = self.sample_attn(
-                    q_scores, n_samples=self.n_samples, mode=self.mode,
+        q_sample, p_sample, sample_log_probs = None, None, None
+        if self.mode == "sample":
+            if q_scores is None or self.use_prior:
+                assert (False)
+                p_sample = self.sample_attn(
+                    p_scores, n_samples=self.n_samples,
                     lengths=memory_lengths, mask=mask if memory_lengths is not None else None)
+                y_align_vectors = p_sample
             else:
-                q_sample = self.sample_attn(
-                    q_scores, n_samples=self.n_samples, mode=self.mode,
-                    lengths=memory_lengths, mask=mask if memory_lengths is not None else None)
-            y_align_vectors = q_sample
+                if q_scores.dist_type == 'categorical':
+                    q_sample, sample_log_probs = self.sample_attn(
+                        q_scores, n_samples=self.n_samples,
+                        lengths=memory_lengths, mask=mask if memory_lengths is not None else None)
+                else:
+                    q_sample = self.sample_attn(
+                        q_scores, n_samples=self.n_samples, mode=self.mode,
+                        lengths=memory_lengths, mask=mask if memory_lengths is not None else None)
+                y_align_vectors = q_sample
+        elif self.mode == "enum":
+            y_align_vectors = None
         """
         # Data should not be K x N x T x S
         if y_align_vectors.dim() == 3:
@@ -337,10 +338,19 @@ class VariationalAttention(nn.Module):
             y_align_vectors = y_align_vectors.unsqueeze(2)
         """
         #y_align_vectors = c_align_vectors.unsqueeze(0) # sanity check
-        context_y = torch.bmm(
-            y_align_vectors.view(-1, targetL, sourceL),
-            memory_bank.unsqueeze(0).repeat(self.n_samples, 1, 1, 1).view(-1, sourceL, dim)
-        ).view(self.n_samples, batch, targetL, dim)
+        # context_y: K x N x T x H
+        if y_align_vectors is not None:
+            context_y = torch.bmm(
+                y_align_vectors.view(-1, targetL, sourceL),
+                memory_bank.unsqueeze(0).repeat(self.n_samples, 1, 1, 1).view(-1, sourceL, dim)
+            ).view(self.n_samples, batch, targetL, dim)
+        else:
+            # For enumerate, K = S.
+            # memory_bank: N x S x H
+            context_y = (memory_bank
+                .unsqueeze(0)
+                .repeat(targetL, 1, 1, 1)
+                .permute(2, 1, 0, 3))
         input = input.unsqueeze(0).expand_as(context_y)
         concat_y = torch.cat([context_y, input], -1)
         # K x N x T x H
@@ -355,7 +365,7 @@ class VariationalAttention(nn.Module):
             # K x N x H
             h_y = h_y.squeeze(2)
             # K x N x S
-            y_align_vectors = y_align_vectors.squeeze(2)
+            #y_align_vectors = y_align_vectors.squeeze(2)
 
             q_scores = Params(
                 alpha = q_scores.alpha.squeeze(1) if q_scores.alpha is not None else None,
@@ -386,7 +396,7 @@ class VariationalAttention(nn.Module):
             # T x K x N x H
             h_y = h_y.permute(2, 0, 1, 3).contiguous()
             # T x K x N x S
-            y_align_vectors = y_align_vectors.permute(2, 0, 1, 3).contiguous()
+            #y_align_vectors = y_align_vectors.permute(2, 0, 1, 3).contiguous()
 
             q_scores = Params(
                 alpha = q_scores.alpha.transpose(0, 1).contiguous(),

@@ -244,7 +244,7 @@ def train_model(model, fields, optim, data_type, model_opt):
                            norm_method, grad_accum_count)
 
     if model_opt.eval_only > 0:
-        assert model.use_prior
+        #assert model.use_prior
         valid_iter = make_dataset_iter(lazily_load_dataset("valid"),
                                        fields, opt,
                                        is_train=False)
