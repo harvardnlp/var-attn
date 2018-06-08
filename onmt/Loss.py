@@ -204,7 +204,7 @@ class NMTLossCompute(LossComputeBase):
                 state["p_alpha"] = dist_info.p.alpha
             else:
                 raise Exception("Unimplemented distribution")
-
+        #import pdb; pdb.set_trace()
         if dist_info.q is not None:
             state["q_samples"] = dist_info.q.samples
             if dist_info.q.dist_type == "dirichlet":

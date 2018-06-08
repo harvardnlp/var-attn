@@ -349,8 +349,8 @@ class VariationalAttention(nn.Module):
             # memory_bank: N x S x H
             context_y = (memory_bank
                 .unsqueeze(0)
-                .repeat(targetL, 1, 1, 1)
-                .permute(2, 1, 0, 3))
+                .repeat(targetL, 1, 1, 1) # T, N, S, H
+                .permute(2, 1, 0, 3)) # S, N, T, H
         input = input.unsqueeze(0).expand_as(context_y)
         concat_y = torch.cat([context_y, input], -1)
         # K x N x T x H

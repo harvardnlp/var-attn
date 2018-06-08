@@ -340,6 +340,7 @@ class ViRNNDecoder(InputFeedRNNDecoder):
             dist_type = q_scores.dist_type,
             samples = torch.stack([d.q.samples for d in dist_infos], dim=0)
                 if dist_infos[0].q.samples is not None else None,
+            log_alpha = q_scores.log_alpha,
             sample_log_probs = torch.stack([d.q.sample_log_probs for d in dist_infos], dim=0)
                 if dist_infos[0].q.sample_log_probs is not None else None,
         ) if q_scores is not None else None
