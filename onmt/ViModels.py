@@ -19,17 +19,12 @@ class InferenceNetwork(nn.Module):
     def __init__(self, inference_network_type, src_embeddings, tgt_embeddings,
                  rnn_type, src_layers, tgt_layers, rnn_size, dropout,
                  attn_type="general",
-                 dist_type="none", use_natural=False, scoresF=F.softplus, normalization="none"):
+                 dist_type="none", scoresF=F.softplus):
         super(InferenceNetwork, self).__init__()
 
         self.inference_network_type = inference_network_type
         self.attn_type = attn_type
         self.dist_type = dist_type
-
-        self.use_natural = use_natural
-
-        # natural gradient update
-        self.normalization = normalization
 
         self.scoresF = scoresF
 
@@ -60,55 +55,6 @@ class InferenceNetwork(nn.Module):
         self.W = torch.nn.Linear(rnn_size, rnn_size)
         self.rnn_size = rnn_size
 
-        # to parametrize log normal distribution
-        if self.dist_type == "log_normal":
-            # TODO(demi): make 100 configurable
-            self.linear_1 = nn.Linear(rnn_size + rnn_size, 100)
-            self.linear_2 = nn.Linear(100, 100)
-            self.mean_out = nn.Linear(100, 1)
-            self.var_out  = nn.Linear(100, 1)
-            self.softplus = nn.Softplus()
-        elif self.dist_type == "dirichlet":
-            if self.normalization == "none":
-                self.bn_alpha = None
-            elif self.normalization == "bn":
-                self.bn_alpha = nn.BatchNorm1d(1, affine=False)
-            else:
-                raise Exception("Invalid normalization type")
-        elif self.dist_type == "categorical":
-            if self.normalization == "none":
-                self.bn_alpha = None
-            elif self.normalization == "bn":
-                self.bn_alpha = nn.BatchNorm1d(1, affine=False)
-            else:
-                raise Exception("Invalid normalization type")
-
-    def get_log_normal_scores(self, h_s, h_t):
-        """ h_s: [batch x src_length x rnn_size]
-            h_t: [batch x tgt_length x rnn_size]
-        """
-        src_batch, src_len, src_dim = h_s.size()
-        tgt_batch, tgt_len, tgt_dim = h_t.size()
-        aeq(src_batch, tgt_batch)
-        aeq(src_dim, tgt_dim)
-        aeq(self.rnn_size, src_dim)
-        
-        h_t_expand = h_t.unsqueeze(2).expand(-1, -1, src_len, -1)
-        h_s_expand = h_s.unsqueeze(1).expand(-1, tgt_len, -1, -1)
-        # [batch, tgt_len, src_len, src_dim]
-        h_expand = torch.cat((h_t_expand, h_s_expand), dim=3)
-        h_fold = h_expand.contiguous().view(-1, src_dim + tgt_dim)
-        
-        h_enc = self.softplus(self.linear_1(h_fold))
-        h_enc = self.softplus(self.linear_2(h_enc))
-        
-        h_mean = self.softplus(self.mean_out(h_enc))
-        h_var = self.softplus(self.var_out(h_enc))
-        
-        h_mean = h_mean.view(tgt_batch, tgt_len, src_len)
-        h_var = h_var.view(tgt_batch, tgt_len, src_len)
-        return [h_mean, h_var]
-
     def forward(self, src, tgt, src_lengths=None, src_precompute=None):
         if src_precompute is None:
             src_final, src_memory_bank = self.src_encoder(src, src_lengths)
@@ -127,10 +73,6 @@ class InferenceNetwork(nn.Module):
 
         if self.dist_type == "dirichlet":
             scores = self.scoresF(torch.bmm(tgt_memory_bank, src_memory_bank))
-
-            if self.bn_alpha is not None:
-                N, T, S = scores.size()
-                scores = self.bn_alpha(scores.view(-1, 1)).view(N, T, S)
 
             # mask source attention
             if src_lengths is not None:
@@ -158,8 +100,6 @@ class InferenceNetwork(nn.Module):
             log_scores = F.log_softmax(scores, dim=-1)
             scores = self.scoresF(scores)
 
-            assert (self.bn_alpha is None)
-
             # Make scores : T x N x S
             scores = scores.transpose(0, 1)
             log_scores = log_scores.transpose(0, 1)
@@ -169,13 +109,6 @@ class InferenceNetwork(nn.Module):
                 log_alpha=log_scores,
                 dist_type=self.dist_type,
             )
-        elif self.dist_type == "log_normal":
-            raise Exception("unimplemented")
-            # log normal
-            src_memory_bank = src_memory_bank.transpose(1, 2)
-            assert src_memory_bank.size() == (batch_size, src_length, rnn_size)
-            scores = self.get_log_normal_scores(src_memory_bank, tgt_memory_bank)
-            # need to transpose this to T x N x S...
         elif self.dist_type == "none":
             scores = torch.bmm(tgt_memory_bank, src_memory_bank)
             # mask source attention
@@ -221,7 +154,7 @@ class ViRNNDecoder(InputFeedRNNDecoder):
           G --> H
     """
     def __init__(self, *args, **kwargs):
-        # lol, fucking mess
+        # Hack to get get subclassing working
         p_dist_type = kwargs.pop("p_dist_type")
         q_dist_type = kwargs.pop("q_dist_type")
         use_prior = kwargs.pop("use_prior")
@@ -230,7 +163,6 @@ class ViRNNDecoder(InputFeedRNNDecoder):
         mode = kwargs.pop("mode")
         input_feed_type = kwargs.pop("input_feed_type")
         super(ViRNNDecoder, self).__init__(*args, **kwargs)
-        # lol.
         self.attn = onmt.modules.VariationalAttention(
             dim             = self.hidden_size,
             p_dist_type     = p_dist_type,
@@ -240,6 +172,7 @@ class ViRNNDecoder(InputFeedRNNDecoder):
             n_samples       = n_samples,
             mode            = mode,
             input_feed_type = input_feed_type,
+            attn_type       = kwargs["attn_type"],
         )
 
     def _run_forward_pass(self, tgt, memory_bank, state, memory_lengths=None,

@@ -73,6 +73,7 @@ class VariationalAttention(nn.Module):
         n_samples=1,
         mode="sample",
         input_feed_type="mean",
+        attn_type="mlp",
     ):
         super(VariationalAttention, self).__init__()
 
@@ -85,17 +86,16 @@ class VariationalAttention(nn.Module):
         self.scoresF = scoresF
         self.n_samples = n_samples
         self.mode = mode
+        self.attn_type = attn_type
 
-        self.linear_in = nn.Linear(dim, dim, bias=False)
-
-        if self.p_dist_type == "log_normal":
-            self.linear_1 = nn.Linear(dim + dim, 100)
-            self.linear_2 = nn.Linear(100, 100)
-            self.softplus = torch.nn.Softplus()
-            self.mean_out = nn.Linear(100, 1)
-            self.var_out = nn.Linear(100, 1)
+        if self.attn_type == "general":
+            self.linear_in = nn.Linear(dim, dim, bias=False)
+        elif self.attn_type == "mlp":
+            self.linear_context = nn.Linear(dim, dim, bias=False)
+            self.linear_query = nn.Linear(dim, dim, bias=True)
+            self.v = nn.Linear(dim, 1, bias=False)
         # mlp wants it with bias
-        out_bias = False
+        out_bias = self.attn_type == "mlp"
         self.linear_out = nn.Linear(dim*2, dim, bias=out_bias)
 
         self.sm = nn.Softmax(dim=-1)
@@ -121,38 +121,27 @@ class VariationalAttention(nn.Module):
         aeq(src_dim, tgt_dim)
         aeq(self.dim, src_dim)
 
-        h_t_ = h_t.view(tgt_batch*tgt_len, tgt_dim)
-        h_t_ = self.linear_in(h_t_)
-        h_t = h_t_.view(tgt_batch, tgt_len, tgt_dim)
-        h_s_ = h_s.transpose(1, 2)
-        # (batch, t_len, d) x (batch, d, s_len) --> (batch, t_len, s_len)
-        return torch.bmm(h_t, h_s_)
+        if self.attn_type == "general":
+            h_t_ = h_t.view(tgt_batch*tgt_len, tgt_dim)
+            h_t_ = self.linear_in(h_t_)
+            h_t = h_t_.view(tgt_batch, tgt_len, tgt_dim)
+            h_s_ = h_s.transpose(1, 2)
+            # (batch, t_len, d) x (batch, d, s_len) --> (batch, t_len, s_len)
+            return torch.bmm(h_t, h_s_)
+        elif self.attn_type == "mlp":
+            dim = self.dim
+            wq = self.linear_query(h_t.view(-1, dim))
+            wq = wq.view(tgt_batch, tgt_len, 1, dim)
+            wq = wq.expand(tgt_batch, tgt_len, src_len, dim)
 
-    def get_raw_scores(self, h_t, h_s):
-        """
-            For log normal.
-        """
-        src_batch, src_len, src_dim = h_s.size()
-        tgt_batch, tgt_len, tgt_dim = h_t.size()
-        aeq(src_batch, tgt_batch)
-        aeq(src_dim, tgt_dim)
-        aeq(self.dim, src_dim)
-        
-        h_t_expand = h_t.unsqueeze(2).expand(-1, -1, src_len, -1)
-        h_s_expand = h_s.unsqueeze(1).expand(-1, tgt_len, -1, -1)
-        # [batch, tgt_len, src_len, src_dim]
-        h_expand = torch.cat((h_t_expand, h_s_expand), dim=3)
-        h_fold = h_expand.contiguous().view(-1, src_dim + tgt_dim)
-        
-        h_enc = self.softplus(self.linear_1(h_fold))
-        h_enc = self.softplus(self.linear_2(h_enc))
-        
-        h_mean = self.softplus(self.mean_out(h_enc))
-        h_var = self.softplus(self.var_out(h_enc))
-        
-        h_mean = h_mean.view(tgt_batch, tgt_len, src_len)
-        h_var = h_var.view(tgt_batch, tgt_len, src_len)
-        return [h_mean, h_var]
+            uh = self.linear_context(h_s.contiguous().view(-1, dim))
+            uh = uh.view(src_batch, 1, src_len, dim)
+            uh = uh.expand(src_batch, tgt_len, src_len, dim)
+
+            # (batch, t_len, s_len, d)
+            wquh = self.tanh(wq + uh)
+
+            return self.v(wquh.view(-1, dim)).view(tgt_batch, tgt_len, src_len)
 
     def sample_attn(self, params, n_samples=1, lengths=None, mask=None):
         dist_type = params.dist_type
@@ -281,9 +270,6 @@ class VariationalAttention(nn.Module):
                 alpha=scores,
                 dist_type=self.p_dist_type,
             )
-        elif self.p_dist_type == "log_normal":
-            raise Exception("Buggy")
-            p_scores = self.get_raw_scores(input, memory_bank)
         elif self.p_dist_type == "categorical":
             scores = self.score(input, memory_bank)
             if memory_lengths is not None:

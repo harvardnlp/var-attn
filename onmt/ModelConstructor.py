@@ -121,8 +121,6 @@ def make_inference_network(opt, src_embeddings, tgt_embeddings,
     dropout = opt.inference_network_dropout
     scoresFstring = opt.alpha_transformation
     scoresF = scoresF_dict[scoresFstring]
-    natural_gradient = opt.inference_network_natural_gradient > 0
-    normalization = opt.inference_network_normalization
     attn_type = opt.q_attn_type
 
     print ('    * inference network type: %s'%inference_network_type)
@@ -132,8 +130,6 @@ def make_inference_network(opt, src_embeddings, tgt_embeddings,
     print ('    * inference network src layers: %s'%inference_network_src_layers)
     print ('    * inference network tgt layers: %s'%inference_network_tgt_layers)
     print ('    * inference network alpha trans: %s'%scoresFstring)
-    print ('    * inference network natural gradient: %s'%natural_gradient)
-    print ('    * inference network normalization: %s'%normalization)
     print ('    * inference network attn type: %s'%attn_type)
     print ('    * inference network dist type: %s'%opt.q_dist_type)
     print ('    * TODO: RNN\'s could be possibly shared')
@@ -143,8 +139,8 @@ def make_inference_network(opt, src_embeddings, tgt_embeddings,
                             rnn_type, inference_network_src_layers,
                             inference_network_tgt_layers, rnn_size, dropout,
                             attn_type=opt.q_attn_type,
-                            dist_type=opt.q_dist_type, use_natural=natural_gradient,
-                            scoresF=scoresF, normalization=normalization)
+                            dist_type=opt.q_dist_type,
+                            scoresF=scoresF)
 
 
 def make_decoder(opt, embeddings):
@@ -182,20 +178,20 @@ def make_decoder(opt, embeddings):
         return ViRNNDecoder(
             opt.rnn_type, opt.brnn,
             opt.dec_layers, opt.rnn_size,
-            opt.global_attention,
-            opt.coverage_attn,
-            opt.context_gate,
-            opt.copy_attn,
-            opt.dropout,
-            embeddings,
-            opt.reuse_copy_attn,
-            p_dist_type = opt.p_dist_type,
-            q_dist_type = opt.q_dist_type,
-            use_prior = opt.use_generative_model > 0,
-            scoresF = scoresF,
+            attn_type       = opt.global_attention,
+            coverage_attn   = opt.coverage_attn,
+            context_gate    = opt.context_gate,
+            copy_attn       = opt.copy_attn,
+            dropout         = opt.dropout,
+            embeddings      = embeddings,
+            reuse_copy_attn = opt.reuse_copy_attn,
+            p_dist_type     = opt.p_dist_type,
+            q_dist_type     = opt.q_dist_type,
+            use_prior       = opt.use_generative_model > 0,
+            scoresF         = scoresF,
             input_feed_type = opt.p_input_feed,
-            n_samples = opt.n_samples,
-            mode = opt.mode,
+            n_samples       = opt.n_samples,
+            mode            = opt.mode,
         )
     else:
         return StdRNNDecoder(opt.rnn_type, opt.brnn,
