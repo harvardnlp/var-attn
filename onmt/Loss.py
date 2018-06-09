@@ -253,6 +253,7 @@ class NMTLossCompute(LossComputeBase):
         xent = self.criterion(scores, gtruth)
 
         if q_sample_log_probs is not None:
+            # This code doesn't handle multiple samples
             scores_nopad = scores[gtruth.ne(self.padding_idx)]
             scores_baseline_nopad = scores_baseline[gtruth.ne(self.padding_idx)]
             gtruth_nopad = gtruth[gtruth.ne(self.padding_idx)]
@@ -301,13 +302,19 @@ class NMTLossCompute(LossComputeBase):
         return loss, stats
 
 
-def filter_shard_state(state, requires_grad=True, volatile=False):
+def filter_shard_state(state, shard_size=None):
     for k, v in state.items():
-        if v is not None:
-            if isinstance(v, Variable) and v.requires_grad:
-                v = Variable(v.data, requires_grad=requires_grad,
-                             volatile=volatile)
+        if shard_size is None and v is not None:
             yield k, v
+
+        if v is not None:
+            v_split = []
+            if isinstance(v, torch.Tensor):
+                for v_chunk in torch.split(v, shard_size):
+                    v_chunk = v_chunk.data.clone()
+                    v_chunk.requires_grad = v.requires_grad
+                    v_split.append(v_chunk)
+            yield k, (v, v_split)
 
 
 def shards(state, shard_size, eval=False):
@@ -319,27 +326,25 @@ def shards(state, shard_size, eval=False):
         shard_size: The maximum size of the shards yielded by the model.
         eval: If True, only yield the state, nothing else.
               Otherwise, yield shards.
-
     Yields:
         Each yielded shard is a dict.
-
     Side effect:
         After the last shard, this function does back-propagation.
     """
     if eval:
-        yield filter_shard_state(state, False, True)
+        yield filter_shard_state(state)
     else:
         # non_none: the subdict of the state dictionary where the values
         # are not None.
-        non_none = dict(filter_shard_state(state))
+        non_none = dict(filter_shard_state(state, shard_size))
 
         # Now, the iteration:
         # state is a dictionary of sequences of tensor-like but we
         # want a sequence of dictionaries of tensors.
         # First, unzip the dictionary into a sequence of keys and a
         # sequence of tensor-like sequences.
-        keys, values = zip(*((k, torch.split(v, shard_size))
-                             for k, v in non_none.items()))
+        keys, values = zip(*((k, [v_chunk for v_chunk in v_split])
+                             for k, (_, v_split) in non_none.items()))
 
         # Now, yield a dictionary for each shard. The keys are always
         # the same. values is a sequence of length #keys where each
@@ -351,7 +356,10 @@ def shards(state, shard_size, eval=False):
             yield dict(zip(keys, shard_tensors))
 
         # Assumed backprop'd
-        variables = ((state[k], v.grad.data) for k, v in non_none.items()
-                     if isinstance(v, Variable) and v.grad is not None)
+        variables = []
+        for k, (v, v_split) in non_none.items():
+            if isinstance(v, torch.Tensor) and state[k].requires_grad:
+                variables.extend(zip(torch.split(state[k], shard_size),
+                                     [v_chunk.grad for v_chunk in v_split]))
         inputs, grads = zip(*variables)
         torch.autograd.backward(inputs, grads)
