@@ -247,6 +247,7 @@ class ViRNNDecoder(InputFeedRNNDecoder):
 
             # do decoder_output_y later
             # decoder_output_y : K x N x H
+            decoder_output_y = self.dropout(decoder_output_y)
 
             decoder_outputs += [decoder_output_y]
             decoder_outputs_baseline += [decoder_output_c]

@@ -166,7 +166,7 @@ class NMTLossCompute(LossComputeBase):
     Standard NMT Loss Computation.
     """
     def __init__(self, generator, tgt_vocab, normalization="sents",
-                 label_smoothing=0.0):
+                 label_smoothing=0.0, train_baseline=False):
         super(NMTLossCompute, self).__init__(generator, tgt_vocab)
         assert (label_smoothing >= 0.0 and label_smoothing <= 1.0)
         if label_smoothing > 0:
@@ -187,6 +187,7 @@ class NMTLossCompute(LossComputeBase):
             self.criterion = nn.NLLLoss(weight, size_average=False)
         self.confidence = 1.0 - label_smoothing
         self.alpha = 1
+        self.train_baseline = train_baseline
 
     def _make_shard_state(self, batch, output, range_, attns=None,
                           dist_info=None, output_baseline=None):
@@ -251,6 +252,7 @@ class NMTLossCompute(LossComputeBase):
             gtruth = Variable(tmp_, requires_grad=False)
 
         xent = self.criterion(scores, gtruth)
+        xent_baseline = self.criterion(scores_baseline, gtruth)
 
         if q_sample_log_probs is not None:
             # This code doesn't handle multiple samples
@@ -293,6 +295,8 @@ class NMTLossCompute(LossComputeBase):
         # subtract reward
         if q_sample_log_probs is not None:
             loss = loss - (reward * q_sample_log_probs).sum()
+            if self.train_baseline:
+                loss = loss + xent_baseline
         #import pdb; pdb.set_trace()
 
         kl_data = kl.data.clone()

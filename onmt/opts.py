@@ -122,6 +122,9 @@ def model_opts(parser):
     group.add_argument("-n_samples", type=int, default=1,
                        help="""Number of samples to estimate log marginal.
                        """)
+    group.add_argument("-train_baseline", type=int, default=0,
+                       help="""Train the basline if > 0.
+                       """)
     group.add_argument("-alpha_transformation", type=str, default="exp",
                        choices=["softplus", "exp", "relu", "sm"],
                        help="""Transformation used to parameterize Dirichlet.
