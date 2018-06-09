@@ -226,7 +226,7 @@ class ViRNNDecoder(InputFeedRNNDecoder):
         q_dist_type = kwargs.pop("q_dist_type")
         use_prior = kwargs.pop("use_prior")
         scoresF = kwargs.pop("scoresF")
-        n_samples= kwargs.pop("n_samples")
+        n_samples = kwargs.pop("n_samples")
         mode = kwargs.pop("mode")
         input_feed_type = kwargs.pop("input_feed_type")
         super(ViRNNDecoder, self).__init__(*args, **kwargs)
@@ -462,8 +462,18 @@ class ViNMTModel(nn.Module):
 
     @n_samples.setter
     def n_samples(self, value):
-        self._n_sampels = value
+        self._n_samples = value
         self.decoder.attn.n_samples = n_samples
+
+    @property
+    def mode(self):
+        return self.decoder.attn.mode
+
+    @mode.setter
+    def mode(self, value):
+        assert value in ["sample", "enum"]
+        print("switching mode to {}".format(value))
+        self.decoder.attn.mode = value
 
     def forward(self, src, tgt, lengths, dec_state=None):
         """Forward propagate a `src` and `tgt` pair for training.

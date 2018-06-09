@@ -230,6 +230,10 @@ class Trainer(object):
         """
         # Set model in validating mode.
         self.model.eval()
+        mode = self.model.mode
+        self.model.mode = "enum"
+        self.valid_loss.generator.mode = "enum"
+        # lol...self.valid_loss.generator and self.train_loss.generator are references
 
         stats = Statistics()
 
@@ -258,6 +262,8 @@ class Trainer(object):
 
         # Set model back to training mode.
         self.model.train()
+        self.model.mode = mode
+        self.train_loss.generator.mode = mode
 
         return stats
 
