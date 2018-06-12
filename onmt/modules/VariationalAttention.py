@@ -277,12 +277,15 @@ class VariationalAttention(nn.Module):
                 mask = sequence_mask(memory_lengths)
                 mask = mask.unsqueeze(1)  # Make it broadcastable.
                 scores.data.masked_fill_(1 - mask, -float('inf'))
-            scores = self.sm(scores)
+            log_scores = F.log_softmax(scores, dim=-1)
+            scores = log_scores.exp()
+            #scores = self.sm(scores)
 
             c_align_vectors = scores
 
             p_scores = Params(
                 alpha=scores,
+                log_alpha=log_scores,
                 dist_type=self.p_dist_type,
             )
 
@@ -315,7 +318,7 @@ class VariationalAttention(nn.Module):
                         q_scores, n_samples=self.n_samples, mode=self.mode,
                         lengths=memory_lengths, mask=mask if memory_lengths is not None else None)
                 y_align_vectors = q_sample
-        elif self.mode == "enum":
+        elif self.mode == "enum" or self.mode == "exact":
             y_align_vectors = None
         """
         # Data should not be K x N x T x S
@@ -361,6 +364,7 @@ class VariationalAttention(nn.Module):
             ) if q_scores is not None else None
             p_scores = Params(
                 alpha = p_scores.alpha.squeeze(1),
+                log_alpha = log_scores.squeeze(1),
                 dist_type = p_scores.dist_type,
                 samples = p_sample.squeeze(2) if p_sample is not None else None,
             )
@@ -391,6 +395,7 @@ class VariationalAttention(nn.Module):
             )
             p_scores = Params(
                 alpha = p_scores.alpha.transpose(0, 1).contiguous(),
+                log_alpha = log_alpha.transpose(0, 1).contiguous(),
                 dist_type = p_scores.dist_type,
                 samples = p_sample.permute(2, 0, 1, 3).contiguous(),
             )

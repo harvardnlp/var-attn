@@ -12,7 +12,7 @@ from torch.nn.utils.rnn import pad_packed_sequence as unpack
 
 import onmt
 from onmt.Utils import aeq, sequence_mask, Params, DistInfo
-from onmt.Models import MeanEncoder, RNNEncoder, InputFeedRNNDecoder, NMTModel, RNNDecoderState
+from onmt.Models import MeanEncoder, RNNEncoder, InputFeedRNNDecoder, NMTModel, RNNDecoderState, BigRNNEncoder
 
 
 class InferenceNetwork(nn.Module):
@@ -46,13 +46,25 @@ class InferenceNetwork(nn.Module):
                                           dropout, src_embeddings, False) 
             self.tgt_encoder = RNNEncoder(rnn_type, True, tgt_layers, rnn_size,
                                           dropout, tgt_embeddings, False) 
+        elif inference_network_type == 'brnn':
+            self.src_encoder = RNNEncoder(rnn_type, True, src_layers, rnn_size,
+                                          dropout, src_embeddings, False) 
+            self.tgt_encoder = RNNEncoder(rnn_type, True, tgt_layers, rnn_size,
+                                          dropout, tgt_embeddings, False) 
+        elif inference_network_type == 'bigbrnn':
+            self.src_encoder = BigRNNEncoder(rnn_type, True, src_layers, rnn_size,
+                                          dropout, src_embeddings, False) 
+            self.tgt_encoder = BigRNNEncoder(rnn_type, True, tgt_layers, rnn_size,
+                                          dropout, tgt_embeddings, False) 
         elif inference_network_type == 'rnn':
             self.src_encoder = RNNEncoder(rnn_type, True, src_layers, rnn_size,
                                           dropout, src_embeddings, False) 
             self.tgt_encoder = RNNEncoder(rnn_type, False, tgt_layers, rnn_size,
                                           dropout, tgt_embeddings, False) 
-
-        self.W = torch.nn.Linear(rnn_size, rnn_size)
+        if inference_network_type == "bigbrnn":
+            self.W = torch.nn.Linear(rnn_size * 2, rnn_size * 2)
+        else:
+            self.W = torch.nn.Linear(rnn_size, rnn_size)
         self.rnn_size = rnn_size
 
     def forward(self, src, tgt, src_lengths=None, src_precompute=None):
@@ -281,6 +293,8 @@ class ViRNNDecoder(InputFeedRNNDecoder):
         p_info = Params(
             alpha = torch.stack([d.p.alpha for d in dist_infos], dim=0),
             dist_type = dist_infos[0].p.dist_type,
+            log_alpha = torch.stack([d.p.log_alpha for d in dist_infos], dim=0)
+                if dist_infos[0].p.log_alpha is not None else None,
             samples = torch.stack([d.p.samples for d in dist_infos], dim=0)
                 if dist_infos[0].p.samples is not None else None,
         )
@@ -405,7 +419,7 @@ class ViNMTModel(nn.Module):
 
     @mode.setter
     def mode(self, value):
-        assert value in ["sample", "enum"]
+        assert value in ["sample", "enum", "exact"]
         print("switching mode to {}".format(value))
         self.decoder.attn.mode = value
 

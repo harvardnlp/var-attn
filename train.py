@@ -246,11 +246,22 @@ def train_model(model, fields, optim, data_type, model_opt):
                            norm_method, grad_accum_count)
 
     if model_opt.eval_only > 0:
-        #assert model.use_prior
+        print("ELBO_q")
         valid_iter = make_dataset_iter(lazily_load_dataset("valid"),
                                        fields, opt,
                                        is_train=False)
-        valid_stats = trainer.validate(valid_iter)
+        valid_stats = trainer.validate(valid_iter, "enum")
+        print('Validation exp(elbo): %g' % valid_stats.expelbo())
+        print('Validation perplexity: %g' % valid_stats.ppl())
+        print('Validation xent: %g' % valid_stats.xent())
+        print('Validation kl: %g' % valid_stats.kl())
+        print('Validation accuracy: %g' % valid_stats.accuracy())
+        print("p(x)")
+        model.use_prior = True
+        valid_iter = make_dataset_iter(lazily_load_dataset("valid"),
+                                       fields, opt,
+                                       is_train=False)
+        valid_stats = trainer.validate(valid_iter, "exact")
         print('Validation exp(elbo): %g' % valid_stats.expelbo())
         print('Validation perplexity: %g' % valid_stats.ppl())
         print('Validation xent: %g' % valid_stats.xent())
@@ -281,7 +292,7 @@ def train_model(model, fields, optim, data_type, model_opt):
         valid_iter = make_dataset_iter(lazily_load_dataset("valid"),
                                        fields, opt,
                                        is_train=False)
-        valid_stats = trainer.validate(valid_iter)
+        valid_stats = trainer.validate(valid_iter, model.mode if model.mode in ["enum", "exact"] else "enum")
         print('Validation exp(elbo): %g' % valid_stats.expelbo())
         print('Validation perplexity: %g' % valid_stats.ppl())
         print('Validation xent: %g' % valid_stats.xent())
@@ -297,7 +308,7 @@ def train_model(model, fields, optim, data_type, model_opt):
             train_stats.log_tensorboard("valid", writer, optim.lr, epoch)
 
         # 4. Update the learning rate
-        trainer.epoch_step(valid_stats.ppl(), epoch)
+        trainer.epoch_step(valid_stats.expelbo(), epoch)
 
         # 5. Drop a checkpoint if needed.
         if epoch >= opt.start_checkpoint_at:

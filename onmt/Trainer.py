@@ -192,7 +192,7 @@ class Trainer(object):
             if self.norm_method == "tokens":
                 num_tokens = batch.tgt[1:].data.view(-1) \
                     .ne(self.train_loss.padding_idx).sum()
-                normalization += num_tokens
+                normalization += num_tokens.item()
             else:
                 normalization += batch.batch_size
 
@@ -222,7 +222,7 @@ class Trainer(object):
 
         return total_stats
 
-    def validate(self, valid_iter):
+    def validate(self, valid_iter, mode="enum"):
         """ Validate model.
             valid_iter: validate data iterator
         Returns:
@@ -230,10 +230,12 @@ class Trainer(object):
         """
         # Set model in validating mode.
         self.model.eval()
-        mode = self.model.mode
-        self.model.mode = "enum"
-        self.valid_loss.generator.mode = "enum"
+        old_mode = self.model.mode
+        self.model.mode = mode
+        self.valid_loss.generator.mode = mode
         # lol...self.valid_loss.generator and self.train_loss.generator are references
+        #import pdb; pdb.set_trace()
+        # We want to always evaluate hard enum
 
         stats = Statistics()
 
@@ -262,8 +264,8 @@ class Trainer(object):
 
         # Set model back to training mode.
         self.model.train()
-        self.model.mode = mode
-        self.train_loss.generator.mode = mode
+        self.model.mode = old_mode
+        self.train_loss.generator.mode = old_mode
 
         return stats
 

@@ -84,8 +84,7 @@ class LossComputeBase(nn.Module):
             :obj:`onmt.Statistics`: loss statistics
         """
         if dist_info is not None:
-            assert (dist_info.p.dist_type == dist_info.q.dist_type)
-            self.dist_type = dist_info.q.dist_type
+            self.dist_type = dist_info.p.dist_type
         range_ = (0, batch.tgt.size(0))
         shard_state = self._make_shard_state(batch, output, range_, attns, dist_info=dist_info, output_baseline=output_baseline)
         _, batch_stats = self._compute_loss(batch, **shard_state)
@@ -127,8 +126,7 @@ class LossComputeBase(nn.Module):
         range_ = (cur_trunc, cur_trunc + trunc_size)
         shard_state = self._make_shard_state(batch, output, range_, attns, dist_info=dist_info, output_baseline=output_baseline)
         if dist_info is not None:
-            assert (dist_info.p.dist_type == dist_info.q.dist_type)
-            self.dist_type = dist_info.q.dist_type
+            self.dist_type = dist_info.p.dist_type
 
         for shard in shards(shard_state, shard_size):
             loss, stats = self._compute_loss(batch, **shard)
@@ -196,28 +194,27 @@ class NMTLossCompute(LossComputeBase):
             "target": batch.tgt[range_[0] + 1: range_[1]],
         }
 
-        # whoops, maybe I need to make everything T first?
-        if dist_info.p is not None:
-            state["p_samples"] = dist_info.p.samples
-            if dist_info.p.dist_type == "dirichlet":
-                state["p_alpha"] = dist_info.p.alpha
-            elif dist_info.p.dist_type == "categorical":
-                state["p_alpha"] = dist_info.p.alpha
-            else:
-                raise Exception("Unimplemented distribution")
-        #import pdb; pdb.set_trace()
-        if dist_info.q is not None:
-            state["q_samples"] = dist_info.q.samples
-            if dist_info.q.dist_type == "dirichlet":
-                state["q_alpha"] = dist_info.q.alpha
-            elif dist_info.q.dist_type == "categorical":
-                state["q_alpha"] = dist_info.q.alpha
-                state["q_log_alpha"] = dist_info.q.log_alpha
-                state["q_sample_log_probs"] = dist_info.q.sample_log_probs
-            else:
-                raise Exception("Unimplemented distribution")
+        if dist_info is not None:
+            if dist_info.p is not None:
+                state["p_samples"] = dist_info.p.samples
+                if dist_info.p.dist_type == "dirichlet":
+                    state["p_alpha"] = dist_info.p.alpha
+                elif dist_info.p.dist_type == "categorical":
+                    state["p_alpha"] = dist_info.p.alpha
+                    state["p_log_alpha"] = dist_info.p.log_alpha
+                else:
+                    raise Exception("Unimplemented distribution")
+            if dist_info.q is not None:
+                state["q_samples"] = dist_info.q.samples
+                if dist_info.q.dist_type == "dirichlet":
+                    state["q_alpha"] = dist_info.q.alpha
+                elif dist_info.q.dist_type == "categorical":
+                    state["q_alpha"] = dist_info.q.alpha
+                    state["q_log_alpha"] = dist_info.q.log_alpha
+                    state["q_sample_log_probs"] = dist_info.q.sample_log_probs
+                else:
+                    raise Exception("Unimplemented distribution")
 
-        assert output_baseline is not None
         if output_baseline is not None:
             state["output_baseline"] = output_baseline
         return state
@@ -228,16 +225,24 @@ class NMTLossCompute(LossComputeBase):
         p_alpha=None, q_alpha=None,
         q_log_alpha=None,
         q_sample_log_probs=None,
+        p_log_alpha=None,
         output_baseline=None
     ):
-        # Reconstruction
-        output_baseline = output_baseline.unsqueeze(1)
-        # TODO(jchiu): hacky, just use q for now, but switch on something later.
-        scores = self.generator(output, q_log_alpha)
-        scores = scores.view(-1, scores.size(-1))
-        scores_baseline = self.generator(output_baseline)
-        scores_baseline = scores_baseline.view(-1, scores.size(-1))
+        if self.generator.mode in ["enum", "exact"]:
+            output_baseline = None
 
+        # Reconstruction
+        # TODO(jchiu): hacky, want to set use_prior.
+        scores = self.generator(
+            output,
+            log_pa=q_log_alpha if q_log_alpha is not None else p_log_alpha,
+            pa=q_alpha if q_alpha is not None else p_alpha,
+        )
+        scores = scores.view(-1, scores.size(-1))
+        if output_baseline is not None:
+            output_baseline = output_baseline.unsqueeze(1)
+            scores_baseline = self.generator(output_baseline)
+            scores_baseline = scores_baseline.view(-1, scores.size(-1))
 
         gtruth = target.view(-1)
         if self.confidence < 1:
@@ -252,9 +257,10 @@ class NMTLossCompute(LossComputeBase):
             gtruth = Variable(tmp_, requires_grad=False)
 
         xent = self.criterion(scores, gtruth)
-        xent_baseline = self.criterion(scores_baseline, gtruth)
+        if output_baseline is not None:
+            xent_baseline = self.criterion(scores_baseline, gtruth)
 
-        if q_sample_log_probs is not None:
+        if q_sample_log_probs is not None and output_baseline is not None:
             # This code doesn't handle multiple samples
             scores_nopad = scores[gtruth.ne(self.padding_idx)]
             scores_baseline_nopad = scores_baseline[gtruth.ne(self.padding_idx)]
@@ -283,7 +289,6 @@ class NMTLossCompute(LossComputeBase):
             elif self.dist_type == 'categorical':
                 q = Cat(q_alpha)
                 p = Cat(p_alpha)
-                #import pdb; pdb.set_trace()
             else:
                 assert (False)
             kl = kl_divergence(q, p).sum()
@@ -297,7 +302,6 @@ class NMTLossCompute(LossComputeBase):
             loss = loss - (reward * q_sample_log_probs).sum()
             if self.train_baseline:
                 loss = loss + xent_baseline
-        #import pdb; pdb.set_trace()
 
         kl_data = kl.data.clone()
 

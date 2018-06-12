@@ -1,4 +1,6 @@
 from __future__ import division
+import math
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -187,6 +189,43 @@ class RNNEncoder(EncoderBase):
         else:
             outs = bottle_hidden(self.bridge[0], hidden)
         return outs
+
+class BigRNNEncoder(RNNEncoder):
+    """ A generic recurrent neural network encoder.
+
+    Args:
+       rnn_type (:obj:`str`):
+          style of recurrent unit to use, one of [RNN, LSTM, GRU, SRU]
+       bidirectional (bool) : use a bidirectional RNN
+       num_layers (int) : number of stacked layers
+       hidden_size (int) : hidden size of each layer
+       dropout (float) : dropout value for :obj:`nn.Dropout`
+       embeddings (:obj:`onmt.modules.Embeddings`): embedding module to use
+    """
+    def __init__(self, rnn_type, bidirectional, num_layers,
+                 hidden_size, dropout=0.0, embeddings=None,
+                 use_bridge=False):
+        super(BigRNNEncoder, self).__init__(
+            rnn_type, bidirectional, num_layers, hidden_size,
+            dropout=dropout, embeddings=embeddings, use_bridge=use_bridge)
+        assert embeddings is not None
+
+        self.embeddings = embeddings
+
+        self.rnn, self.no_pack_padded_seq = \
+            rnn_factory(rnn_type,
+                        input_size=embeddings.embedding_size,
+                        hidden_size=hidden_size,
+                        num_layers=num_layers,
+                        dropout=dropout,
+                        bidirectional=bidirectional)
+
+        # Initialize the bridge layer
+        self.use_bridge = use_bridge
+        if self.use_bridge:
+            self._initialize_bridge(rnn_type,
+                                    hidden_size,
+                                    num_layers)
 
 
 class RNNDecoderBase(nn.Module):
@@ -558,6 +597,7 @@ class NMTModel(nn.Module):
         super(NMTModel, self).__init__()
         self.encoder = encoder
         self.decoder = decoder
+        self.mode = None
 
     def forward(self, src, tgt, lengths, dec_state=None):
         """Forward propagate a `src` and `tgt` pair for training.
@@ -594,7 +634,7 @@ class NMTModel(nn.Module):
             # Not yet supported on multi-gpu
             dec_state = None
             attns = None
-        return decoder_outputs, attns, dec_state
+        return decoder_outputs, attns, dec_state, None, None
 
 
 class DecoderState(object):
@@ -694,17 +734,27 @@ class Generator(nn.Module):
         else:
             return m + (x-m.unsqueeze(dim)).exp().sum(dim, keepdim=keepdim).log()
 
-    def forward(self, input, log_pa=None):
+    def forward(self, input, log_pa=None, pa=None):
         # log_pa: T x N x S=K
-        #import pdb; pdb.set_trace()
-        assert input.dim() == 4, "Need T x K x N x H"
+        #assert input.dim() == 4, "Need T x K x N x H"
         scores = F.log_softmax(self.proj(input), dim=-1)
+        if input.dim() == 3:
+            # Shortcircuit
+            return scores
         if scores.size(1) == 1:
             scores = scores.squeeze(1)
         else:
-            if self.mode == "enum" and log_pa is not None:
+            if self.mode == "exact" and log_pa is not None:
+                # for exact marginal
                 scores = scores + log_pa.transpose(1,2).unsqueeze(-1)
-            scores = self.logsumexp(scores, dim=1, keepdim=False)
+                scores = self.logsumexp(scores, dim=1, keepdim=False)
+            elif self.mode == "enum" and pa is not None:
+                # for exact elbo
+                scores = scores * pa.transpose(1,2).unsqueeze(-1)
+                scores = scores.sum(dim=1, keepdim=False)
+            else:
+                scores = self.logsumexp(scores, dim=1, keepdim=False)
+                scores = scores - math.log(input.size(1))
         return scores
         """
         scores = self.proj(input)
