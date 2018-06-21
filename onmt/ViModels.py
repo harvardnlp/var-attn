@@ -12,7 +12,7 @@ from torch.nn.utils.rnn import pad_packed_sequence as unpack
 
 import onmt
 from onmt.Utils import aeq, sequence_mask, Params, DistInfo
-from onmt.Models import MeanEncoder, RNNEncoder, InputFeedRNNDecoder, NMTModel, RNNDecoderState, BigRNNEncoder
+from onmt.Models import MeanEncoder, RNNEncoder, InputFeedRNNDecoder, NMTModel, RNNDecoderState
 
 
 class InferenceNetwork(nn.Module):
@@ -43,18 +43,17 @@ class InferenceNetwork(nn.Module):
             self.tgt_encoder = MeanEncoder(tgt_layers, tgt_embeddings)
         elif inference_network_type == 'brnn':
             self.src_encoder = RNNEncoder(rnn_type, True, src_layers, rnn_size,
+                                          rnn_size,
                                           dropout, src_embeddings, False) 
             self.tgt_encoder = RNNEncoder(rnn_type, True, tgt_layers, rnn_size,
-                                          dropout, tgt_embeddings, False) 
-        elif inference_network_type == 'brnn':
-            self.src_encoder = RNNEncoder(rnn_type, True, src_layers, rnn_size,
-                                          dropout, src_embeddings, False) 
-            self.tgt_encoder = RNNEncoder(rnn_type, True, tgt_layers, rnn_size,
+                                          rnn_size,
                                           dropout, tgt_embeddings, False) 
         elif inference_network_type == 'bigbrnn':
-            self.src_encoder = BigRNNEncoder(rnn_type, True, src_layers, rnn_size,
+            self.src_encoder = RNNEncoder(rnn_type, True, src_layers, 2*rnn_size,
+                                             2*rnn_size,
                                           dropout, src_embeddings, False) 
-            self.tgt_encoder = BigRNNEncoder(rnn_type, True, tgt_layers, rnn_size,
+            self.tgt_encoder = RNNEncoder(rnn_type, True, tgt_layers, 2*rnn_size,
+                                             2*rnn_size,
                                           dropout, tgt_embeddings, False) 
         elif inference_network_type == 'rnn':
             self.src_encoder = RNNEncoder(rnn_type, True, src_layers, rnn_size,
@@ -62,9 +61,9 @@ class InferenceNetwork(nn.Module):
             self.tgt_encoder = RNNEncoder(rnn_type, False, tgt_layers, rnn_size,
                                           dropout, tgt_embeddings, False) 
         if inference_network_type == "bigbrnn":
-            self.W = torch.nn.Linear(rnn_size * 2, rnn_size * 2)
+            self.W = torch.nn.Linear(rnn_size * 2, rnn_size * 2, bias=False)
         else:
-            self.W = torch.nn.Linear(rnn_size, rnn_size)
+            self.W = torch.nn.Linear(rnn_size, rnn_size, bias=False)
         self.rnn_size = rnn_size
 
     def forward(self, src, tgt, src_lengths=None, src_precompute=None):
@@ -99,8 +98,7 @@ class InferenceNetwork(nn.Module):
                 alpha=scores,
                 dist_type=self.dist_type,
             )
-        assert (self.dist_type == 'categorical')
-        if self.dist_type == "categorical":
+        elif self.dist_type == "categorical":
             scores = torch.bmm(tgt_memory_bank, src_memory_bank)
             # mask source attention
             assert (self.mask_val == -float('inf'))
@@ -110,7 +108,7 @@ class InferenceNetwork(nn.Module):
                 scores.data.masked_fill_(1-mask, self.mask_val)
             # scoresF should be softmax
             log_scores = F.log_softmax(scores, dim=-1)
-            scores = self.scoresF(scores)
+            scores = F.softmax(scores, dim=-1)
 
             # Make scores : T x N x S
             scores = scores.transpose(0, 1)
@@ -176,7 +174,9 @@ class ViRNNDecoder(InputFeedRNNDecoder):
         input_feed_type = kwargs.pop("input_feed_type")
         super(ViRNNDecoder, self).__init__(*args, **kwargs)
         self.attn = onmt.modules.VariationalAttention(
-            dim             = self.hidden_size,
+            src_dim         = self.memory_size,
+            tgt_dim         = self.hidden_size,
+            attn_dim        = self.attn_size,
             p_dist_type     = p_dist_type,
             q_dist_type     = q_dist_type,
             use_prior       = use_prior,
@@ -238,7 +238,7 @@ class ViRNNDecoder(InputFeedRNNDecoder):
                 )
             else:
                 q_scores_i = None
-            decoder_output_y, decoder_output_c, attn_c, dist_info = self.attn(
+            decoder_output_y, decoder_output_c, context_c, attn_c, dist_info = self.attn(
                 rnn_output,
                 memory_bank.transpose(0, 1),
                 memory_lengths=memory_lengths,
@@ -255,7 +255,7 @@ class ViRNNDecoder(InputFeedRNNDecoder):
                     decoder_input, rnn_output, decoder_output_c
                 )
             decoder_output_c = self.dropout(decoder_output_c)
-            input_feed = decoder_output_c
+            input_feed = context_c
 
             # do decoder_output_y later
             # decoder_output_y : K x N x H
@@ -368,7 +368,7 @@ class ViRNNDecoder(InputFeedRNNDecoder):
         """
         Using input feed by concatenating input with attention vectors.
         """
-        return self.embeddings.embedding_size + self.hidden_size
+        return self.embeddings.embedding_size + self.memory_size
 
 
 class ViNMTModel(nn.Module):
@@ -457,6 +457,11 @@ class ViNMTModel(nn.Module):
         enc_final, memory_bank = self.encoder(src, lengths)
         enc_state = self.decoder.init_decoder_state(
             src, memory_bank, enc_final)
+        enc_state.hidden = (
+            enc_state.hidden[0].detach().fill_(0),
+            enc_state.hidden[1].detach().fill_(0),
+        )
+
         if self.inference_network is not None and not self.use_prior:
             SRC_PRECOMPUTE = False
             # enc_final is unused anyway, lol
@@ -467,7 +472,6 @@ class ViNMTModel(nn.Module):
             #q_scores[0].register_hook(lambda x: print(x.min().item(), x.max().item()))
         else:
             q_scores = None
-
         decoder_outputs, dec_state, attns, dist_info, decoder_outputs_baseline = \
             self.decoder(tgt, memory_bank,
                          enc_state if dec_state is None

@@ -76,6 +76,7 @@ class Optim(object):
                     self.params.append(p)
                 else:
                     self.sparse_params.append(p)
+                    print("Sparse parameter {}".format(k))
         if self.method == 'sgd':
             self.optimizer = optim.SGD(self.params, lr=self.lr)
         elif self.method == 'adagrad':

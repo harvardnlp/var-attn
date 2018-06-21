@@ -64,7 +64,8 @@ class VariationalAttention(nn.Module):
 
     """
     def __init__(
-        self, dim,
+        self, src_dim, tgt_dim,
+        attn_dim,
         p_dist_type="dirichlet",
         q_dist_type="dirichlet",
         e_dist_type="dirichlet",
@@ -79,7 +80,9 @@ class VariationalAttention(nn.Module):
 
         # attn type is always general
         # no coverage crap
-        self.dim = dim
+        self.src_dim = src_dim
+        self.tgt_dim = tgt_dim
+        self.attn_dim = attn_dim
         self.p_dist_type = p_dist_type
         self.q_dist_tyqe = q_dist_type
         self.use_prior = use_prior
@@ -87,16 +90,19 @@ class VariationalAttention(nn.Module):
         self.n_samples = n_samples
         self.mode = mode
         self.attn_type = attn_type
+        self.dim = attn_dim
+        dim = self.dim
 
         if self.attn_type == "general":
-            self.linear_in = nn.Linear(dim, dim, bias=False)
+            self.linear_in = nn.Linear(tgt_dim, src_dim, bias=False)
         elif self.attn_type == "mlp":
-            self.linear_context = nn.Linear(dim, dim, bias=False)
+            self.linear_context = nn.Linear(src_dim, dim, bias=False)
             self.linear_query = nn.Linear(dim, dim, bias=True)
             self.v = nn.Linear(dim, 1, bias=False)
         # mlp wants it with bias
         out_bias = self.attn_type == "mlp"
-        self.linear_out = nn.Linear(dim*2, dim, bias=out_bias)
+        #self.linear_out = nn.Linear(dim*2, dim, bias=out_bias)
+        self.linear_out = nn.Linear(src_dim + tgt_dim, tgt_dim, bias=out_bias)
 
         self.sm = nn.Softmax(dim=-1)
         self.tanh = nn.Tanh()
@@ -118,13 +124,13 @@ class VariationalAttention(nn.Module):
         src_batch, src_len, src_dim = h_s.size()
         tgt_batch, tgt_len, tgt_dim = h_t.size()
         aeq(src_batch, tgt_batch)
-        aeq(src_dim, tgt_dim)
-        aeq(self.dim, src_dim)
+        #aeq(src_dim, tgt_dim)
+        #aeq(self.dim, src_dim)
 
         if self.attn_type == "general":
             h_t_ = h_t.view(tgt_batch*tgt_len, tgt_dim)
             h_t_ = self.linear_in(h_t_)
-            h_t = h_t_.view(tgt_batch, tgt_len, tgt_dim)
+            h_t = h_t_.view(tgt_batch, tgt_len, src_dim)
             h_s_ = h_s.transpose(1, 2)
             # (batch, t_len, d) x (batch, d, s_len) --> (batch, t_len, s_len)
             return torch.bmm(h_t, h_s_)
@@ -205,7 +211,7 @@ class VariationalAttention(nn.Module):
             pass
         else:
             raise Exception("Unsupported dist")
-        return attns
+        return attns, None
 
     def forward(self, input, memory_bank, memory_lengths=None, coverage=None, q_scores=None):
         """
@@ -244,8 +250,8 @@ class VariationalAttention(nn.Module):
         batch, sourceL, dim = memory_bank.size()
         batch_, targetL, dim_ = input.size()
         aeq(batch, batch_)
-        aeq(dim, dim_)
-        aeq(self.dim, dim)
+        #aeq(dim, dim_)
+        #aeq(self.dim, dim)
 
         # compute attention scores, as in Luong et al.
         #align = self.score(input, memory_bank)
@@ -303,20 +309,14 @@ class VariationalAttention(nn.Module):
         q_sample, p_sample, sample_log_probs = None, None, None
         if self.mode == "sample":
             if q_scores is None or self.use_prior:
-                assert (False)
-                p_sample = self.sample_attn(
+                p_sample, sample_log_probs = self.sample_attn(
                     p_scores, n_samples=self.n_samples,
                     lengths=memory_lengths, mask=mask if memory_lengths is not None else None)
                 y_align_vectors = p_sample
             else:
-                if q_scores.dist_type == 'categorical':
-                    q_sample, sample_log_probs = self.sample_attn(
-                        q_scores, n_samples=self.n_samples,
-                        lengths=memory_lengths, mask=mask if memory_lengths is not None else None)
-                else:
-                    q_sample = self.sample_attn(
-                        q_scores, n_samples=self.n_samples, mode=self.mode,
-                        lengths=memory_lengths, mask=mask if memory_lengths is not None else None)
+                q_sample, sample_log_probs = self.sample_attn(
+                    q_scores, n_samples=self.n_samples,
+                    lengths=memory_lengths, mask=mask if memory_lengths is not None else None)
                 y_align_vectors = q_sample
         elif self.mode == "enum" or self.mode == "exact":
             y_align_vectors = None
@@ -340,7 +340,8 @@ class VariationalAttention(nn.Module):
                 .unsqueeze(0)
                 .repeat(targetL, 1, 1, 1) # T, N, S, H
                 .permute(2, 1, 0, 3)) # S, N, T, H
-        input = input.unsqueeze(0).expand_as(context_y)
+        #input = input.unsqueeze(0).expand_as(context_y)
+        input = input.unsqueeze(0).repeat(context_y.size(0), 1, 1, 1)
         concat_y = torch.cat([context_y, input], -1)
         # K x N x T x H
         h_y = self.tanh(self.linear_out(concat_y))
@@ -350,6 +351,7 @@ class VariationalAttention(nn.Module):
             h_c = h_c.squeeze(1)
             # N x S
             c_align_vectors = c_align_vectors.squeeze(1)
+            context_c = context_c.squeeze(1)
 
             # K x N x H
             h_y = h_y.squeeze(2)
@@ -372,7 +374,7 @@ class VariationalAttention(nn.Module):
             # Check output sizes
             batch_, dim_ = h_c.size()
             aeq(batch, batch_)
-            aeq(dim, dim_)
+            #aeq(dim, dim_)
             batch_, sourceL_ = c_align_vectors.size()
             aeq(batch, batch_)
             aeq(sourceL, sourceL_)
@@ -424,4 +426,4 @@ class VariationalAttention(nn.Module):
         #   either N x S, or T x N x S
         # raw_scores: unnormalized scores
         #   either N x S, or T x N x S
-        return h_y, h_c, c_align_vectors, dist_info
+        return h_y, h_c, context_c, c_align_vectors, dist_info

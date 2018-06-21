@@ -109,7 +109,7 @@ class RNNEncoder(EncoderBase):
        embeddings (:obj:`onmt.modules.Embeddings`): embedding module to use
     """
     def __init__(self, rnn_type, bidirectional, num_layers,
-                 hidden_size, dropout=0.0, embeddings=None,
+                 hidden_size, dec_hidden_size, dropout=0.0, embeddings=None,
                  use_bridge=False):
         super(RNNEncoder, self).__init__()
         assert embeddings is not None
@@ -132,6 +132,7 @@ class RNNEncoder(EncoderBase):
         if self.use_bridge:
             self._initialize_bridge(rnn_type,
                                     hidden_size,
+                                    dec_hidden_size,
                                     num_layers)
 
     def forward(self, src, lengths=None, encoder_state=None):
@@ -158,16 +159,18 @@ class RNNEncoder(EncoderBase):
 
     def _initialize_bridge(self, rnn_type,
                            hidden_size,
+                           output_size,
                            num_layers):
 
         # LSTM has hidden and cell state, other only one
         number_of_states = 2 if rnn_type == "LSTM" else 1
         # Total number of states
         self.total_hidden_dim = hidden_size * num_layers
+        self.total_out_dim = output_size * num_layers
 
         # Build a linear layer for each
         self.bridge = nn.ModuleList([nn.Linear(self.total_hidden_dim,
-                                               self.total_hidden_dim,
+                                               self.total_out_dim // number_of_states,
                                                bias=True)
                                      for i in range(number_of_states)])
 
@@ -181,7 +184,8 @@ class RNNEncoder(EncoderBase):
             """
             size = states.size()
             result = linear(states.view(-1, self.total_hidden_dim))
-            return F.relu(result).view(size)
+            #return F.relu(result).view(size)
+            return result.view(size[0], size[1], -1)
 
         if isinstance(hidden, tuple):  # LSTM
             outs = tuple([bottle_hidden(layer, hidden[ix])
@@ -189,43 +193,6 @@ class RNNEncoder(EncoderBase):
         else:
             outs = bottle_hidden(self.bridge[0], hidden)
         return outs
-
-class BigRNNEncoder(RNNEncoder):
-    """ A generic recurrent neural network encoder.
-
-    Args:
-       rnn_type (:obj:`str`):
-          style of recurrent unit to use, one of [RNN, LSTM, GRU, SRU]
-       bidirectional (bool) : use a bidirectional RNN
-       num_layers (int) : number of stacked layers
-       hidden_size (int) : hidden size of each layer
-       dropout (float) : dropout value for :obj:`nn.Dropout`
-       embeddings (:obj:`onmt.modules.Embeddings`): embedding module to use
-    """
-    def __init__(self, rnn_type, bidirectional, num_layers,
-                 hidden_size, dropout=0.0, embeddings=None,
-                 use_bridge=False):
-        super(BigRNNEncoder, self).__init__(
-            rnn_type, bidirectional, num_layers, hidden_size,
-            dropout=dropout, embeddings=embeddings, use_bridge=use_bridge)
-        assert embeddings is not None
-
-        self.embeddings = embeddings
-
-        self.rnn, self.no_pack_padded_seq = \
-            rnn_factory(rnn_type,
-                        input_size=embeddings.embedding_size,
-                        hidden_size=hidden_size,
-                        num_layers=num_layers,
-                        dropout=dropout,
-                        bidirectional=bidirectional)
-
-        # Initialize the bridge layer
-        self.use_bridge = use_bridge
-        if self.use_bridge:
-            self._initialize_bridge(rnn_type,
-                                    hidden_size,
-                                    num_layers)
 
 
 class RNNDecoderBase(nn.Module):
@@ -275,7 +242,7 @@ class RNNDecoderBase(nn.Module):
        embeddings (:obj:`onmt.modules.Embeddings`): embedding module to use
     """
     def __init__(self, rnn_type, bidirectional_encoder, num_layers,
-                 hidden_size, attn_type="general",
+                 memory_size, hidden_size, attn_size, attn_type="general",
                  coverage_attn=False, context_gate=None,
                  copy_attn=False, dropout=0.0, embeddings=None,
                  reuse_copy_attn=False):
@@ -285,7 +252,9 @@ class RNNDecoderBase(nn.Module):
         self.decoder_type = 'rnn'
         self.bidirectional_encoder = bidirectional_encoder
         self.num_layers = num_layers
+        self.memory_size = memory_size
         self.hidden_size = hidden_size
+        self.attn_size = attn_size
         self.embeddings = embeddings
         self.dropout = nn.Dropout(dropout)
 
@@ -376,7 +345,8 @@ class RNNDecoderBase(nn.Module):
         if isinstance(encoder_final, tuple):  # LSTM
             return RNNDecoderState(self.hidden_size,
                                    tuple([_fix_enc_hidden(enc_hid)
-                                         for enc_hid in encoder_final]))
+                                         for enc_hid in encoder_final]),
+                                   self.memory_size)
         else:  # GRU
             return RNNDecoderState(self.hidden_size,
                                    _fix_enc_hidden(encoder_final))
@@ -579,7 +549,7 @@ class InputFeedRNNDecoder(RNNDecoderBase):
         """
         Using input feed by concatenating input with attention vectors.
         """
-        return self.embeddings.embedding_size + self.hidden_size
+        return self.embeddings.embedding_size + self.memory_size
 
 
 class NMTModel(nn.Module):
@@ -680,7 +650,7 @@ class DecoderState(object):
 
 
 class RNNDecoderState(DecoderState):
-    def __init__(self, hidden_size, rnnstate):
+    def __init__(self, hidden_size, rnnstate, context_size=None):
         """
         Args:
             hidden_size (int): the size of hidden layer of the decoder.
@@ -696,7 +666,7 @@ class RNNDecoderState(DecoderState):
 
         # Init the input feed.
         batch_size = self.hidden[0].size(1)
-        h_size = (batch_size, hidden_size)
+        h_size = (batch_size, context_size if context_size is not None else hidden_size)
         self.input_feed = Variable(self.hidden[0].data.new(*h_size).zero_(),
                                    requires_grad=False).unsqueeze(0)
 

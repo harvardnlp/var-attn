@@ -66,8 +66,12 @@ def model_opts(parser):
                        help='Number of layers in the encoder')
     group.add_argument('-dec_layers', type=int, default=2,
                        help='Number of layers in the decoder')
-    group.add_argument('-rnn_size', type=int, default=500,
+    group.add_argument('-memory_size', type=int, default=500,
                        help='Size of rnn hidden states')
+    group.add_argument('-decoder_rnn_size', type=int, default=500,
+                       help='Size of rnn hidden states')
+    group.add_argument('-attention_size', type=int, default=500,
+                       help='Size of decoder attention')
     group.add_argument('-cnn_kernel_width', type=int, default=3,
                        help="""Size of windows in the cnn, the kernel_size is
                        (cnn_kernel_width, 1) in conv layer""")
@@ -321,6 +325,10 @@ def train_opts(parser):
                        path to the pretrained model's state_dict.""")
 
     group.add_argument('-init_with', default='', type=str,
+                       help="""If initializing a variational model
+                       from a checkpoint then this is the
+                       path to the pretrained model's state_dict.""")
+    group.add_argument('-eval_with', default='', type=str,
                        help="""If initializing a variational model
                        from a checkpoint then this is the
                        path to the pretrained model's state_dict.""")

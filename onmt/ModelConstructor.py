@@ -94,7 +94,7 @@ def make_encoder(opt, embeddings):
     else:
         # "rnn" or "brnn"
         return RNNEncoder(opt.rnn_type, opt.brnn, opt.enc_layers,
-                          opt.rnn_size, opt.dropout, embeddings,
+                          opt.memory_size, opt.decoder_rnn_size, opt.dropout, embeddings,
                           opt.bridge)
 
 
@@ -162,7 +162,10 @@ def make_decoder(opt, embeddings):
     elif opt.input_feed and opt.inference_network_type == "none":
         print("input feed")
         return InputFeedRNNDecoder(opt.rnn_type, opt.brnn,
-                                   opt.dec_layers, opt.rnn_size,
+                                   opt.dec_layers,
+                                   opt.memory_size,
+                                   opt.decoder_rnn_size,
+                                   opt.attention_size,
                                    opt.global_attention,
                                    opt.coverage_attn,
                                    opt.context_gate,
@@ -177,7 +180,10 @@ def make_decoder(opt, embeddings):
 
         return ViRNNDecoder(
             opt.rnn_type, opt.brnn,
-            opt.dec_layers, opt.rnn_size,
+            opt.dec_layers,
+            memory_size     = opt.memory_size,
+            hidden_size     = opt.decoder_rnn_size,
+            attn_size       = opt.attention_size,
             attn_type       = opt.global_attention,
             coverage_attn   = opt.coverage_attn,
             context_gate    = opt.context_gate,
@@ -303,7 +309,7 @@ def make_base_model(model_opt, fields, gpu, checkpoint=None):
             nn.LogSoftmax(dim=1))
         """
         generator = Generator(
-            in_dim = model_opt.rnn_size,
+            in_dim = model_opt.decoder_rnn_size,
             out_dim = len(fields["tgt"].vocab),
             mode = model_opt.mode,
         )

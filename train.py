@@ -21,6 +21,8 @@ import onmt.modules
 from onmt.Utils import use_gpu
 import onmt.opts
 
+# Turn off cudnn
+torch.backends.cudnn.enabled = False
 
 parser = argparse.ArgumentParser(
     description='train.py',
@@ -246,7 +248,9 @@ def train_model(model, fields, optim, data_type, model_opt):
                            norm_method, grad_accum_count)
 
     if model_opt.eval_only > 0:
+        print("|Param|: {}".format(sum([p.norm()**2 for p in model.parameters()]).data[0]**0.5))
         print("ELBO_q")
+        model.use_prior = False
         valid_iter = make_dataset_iter(lazily_load_dataset("valid"),
                                        fields, opt,
                                        is_train=False)
@@ -292,7 +296,7 @@ def train_model(model, fields, optim, data_type, model_opt):
         valid_iter = make_dataset_iter(lazily_load_dataset("valid"),
                                        fields, opt,
                                        is_train=False)
-        valid_stats = trainer.validate(valid_iter, model.mode if model.mode in ["enum", "exact"] else "enum")
+        valid_stats = trainer.validate(valid_iter, model.mode)
         print('Validation exp(elbo): %g' % valid_stats.expelbo())
         print('Validation perplexity: %g' % valid_stats.ppl())
         print('Validation xent: %g' % valid_stats.xent())
@@ -431,7 +435,7 @@ def build_optim(model, checkpoint):
             adagrad_accum=opt.adagrad_accumulator_init,
             decay_method=opt.decay_method,
             warmup_steps=opt.warmup_steps,
-            model_size=opt.rnn_size)
+            model_size=None)
 
     # Stage 1:
     # Essentially optim.set_parameters (re-)creates and optimizer using
@@ -505,6 +509,12 @@ def main():
         checkpoint = torch.load(opt.init_with,
                                 map_location=lambda storage, loc: storage)
         model_opt = opt
+    elif opt.eval_with:
+        print('Loading checkpoint from %s' % opt.eval_with)
+        checkpoint = torch.load(opt.eval_with,
+                                map_location=lambda storage, loc: storage)
+        model_opt = checkpoint["opt"]
+        model_opt.eval_only = 1
     else:
         checkpoint = None
         model_opt = opt

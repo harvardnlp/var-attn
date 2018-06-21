@@ -230,13 +230,12 @@ class NMTLossCompute(LossComputeBase):
     ):
         if self.generator.mode in ["enum", "exact"]:
             output_baseline = None
-
         # Reconstruction
         # TODO(jchiu): hacky, want to set use_prior.
         scores = self.generator(
             output,
-            log_pa=q_log_alpha if q_log_alpha is not None else p_log_alpha,
-            pa=q_alpha if q_alpha is not None else p_alpha,
+            log_pa = q_log_alpha if q_log_alpha is not None else p_log_alpha,
+            pa = q_alpha if q_alpha is not None else p_alpha,
         )
         scores = scores.view(-1, scores.size(-1))
         if output_baseline is not None:

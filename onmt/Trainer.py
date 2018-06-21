@@ -202,6 +202,8 @@ class Trainer(object):
                         report_stats, normalization)
 
                 if report_func is not None:
+                    if idx % 1000 == -1 % 1000:
+                        print("|Param|: {}".format(sum([p.norm()**2 for p in self.model.parameters()]).data[0]**0.5))
                     report_stats = report_func(
                             epoch, idx, num_batches,
                             self.progress_step,
@@ -222,7 +224,7 @@ class Trainer(object):
 
         return total_stats
 
-    def validate(self, valid_iter, mode="enum"):
+    def validate(self, valid_iter, mode=None):
         """ Validate model.
             valid_iter: validate data iterator
         Returns:
@@ -231,6 +233,8 @@ class Trainer(object):
         # Set model in validating mode.
         self.model.eval()
         old_mode = self.model.mode
+        if mode is None:
+            mode = old_mode
         self.model.mode = mode
         self.valid_loss.generator.mode = mode
         # lol...self.valid_loss.generator and self.train_loss.generator are references
