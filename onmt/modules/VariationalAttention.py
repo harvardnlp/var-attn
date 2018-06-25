@@ -23,8 +23,6 @@ class VariationalAttention(nn.Module):
     ):
         super(VariationalAttention, self).__init__()
 
-        # attn type is always general
-        # no coverage crap
         self.src_dim = src_dim
         self.tgt_dim = tgt_dim
         self.attn_dim = attn_dim
