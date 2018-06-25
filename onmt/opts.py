@@ -121,7 +121,7 @@ def model_opts(parser):
                        """)
     group.add_argument("-mode", type=str, default="sample",
                        choices=["sample", "enum", "exact"],
-                       help="""Sample or enumerate.
+                       help="""Sample or enumerate ELBO, or calculate reconstruction exactly.
                        """)
     group.add_argument("-n_samples", type=int, default=1,
                        help="""Number of samples to estimate log marginal.
@@ -137,9 +137,9 @@ def model_opts(parser):
                        help="""Use the generative model, namely the attn prior,
                        instead of the inference network for the attention.
                        """)
-    group.add_argument("-p_dist_type", type=str, default="dirichlet",
-                        choices=["log_normal", "dirichlet", "categorical", "none"],
-                        help="""q and p_a distribution type.
+    group.add_argument("-p_dist_type", type=str, default="categorical",
+                        choices=["categorical", "none"],
+                        help="""p_a distribution type.
                         If 'none', then uses a softmax over scores.
                         """)
     group.add_argument("-q_attn_type", type=str, default="general",
@@ -147,9 +147,9 @@ def model_opts(parser):
                         help="""q and p_a distribution type.
                         If 'none', then uses a softmax over scores.
                         """)
-    group.add_argument("-q_dist_type", type=str, default="dirichlet",
-                        choices=["log_normal", "dirichlet", "categorical", "none"],
-                        help="""q and p_a distribution type.
+    group.add_argument("-q_dist_type", type=str, default="categorical",
+                        choices=["categorical", "none"],
+                        help="""q distribution type.
                         If 'none', then uses a softmax over scores.
                         """)
     group.add_argument("-dbg_inf", type=int, default=0,
@@ -159,7 +159,7 @@ def model_opts(parser):
                        choices=['rnn', 'bigbrnn', 'brnn', 'embedding_only', 'none'],
                        help="""Type of inference network to use.
                        Options are
-                       [rnn|brnn|embedding_only].""")
+                       [rnn|bigbrnn|brnn|embedding_only].""")
     group.add_argument('-inference_network_share_embeddings', type=int, default=1,
                        help="""Use src/tgt word embeddings for inference network.""")
     group.add_argument('-inference_network_src_word_vec_size', type=int, default=500,

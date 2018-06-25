@@ -195,7 +195,6 @@ def make_decoder(opt, embeddings):
             q_dist_type     = opt.q_dist_type,
             use_prior       = opt.use_generative_model > 0,
             scoresF         = scoresF,
-            input_feed_type = opt.p_input_feed,
             n_samples       = opt.n_samples,
             mode            = opt.mode,
         )

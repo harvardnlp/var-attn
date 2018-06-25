@@ -12,7 +12,6 @@ from torch.autograd import Variable
 import onmt
 import onmt.io
 
-from torch.distributions import Dirichlet as Dir
 from torch.distributions.categorical import Categorical as Cat
 from torch.distributions.kl import kl_divergence
 
@@ -197,18 +196,14 @@ class NMTLossCompute(LossComputeBase):
         if dist_info is not None:
             if dist_info.p is not None:
                 state["p_samples"] = dist_info.p.samples
-                if dist_info.p.dist_type == "dirichlet":
-                    state["p_alpha"] = dist_info.p.alpha
-                elif dist_info.p.dist_type == "categorical":
+                if dist_info.p.dist_type == "categorical":
                     state["p_alpha"] = dist_info.p.alpha
                     state["p_log_alpha"] = dist_info.p.log_alpha
                 else:
                     raise Exception("Unimplemented distribution")
             if dist_info.q is not None:
                 state["q_samples"] = dist_info.q.samples
-                if dist_info.q.dist_type == "dirichlet":
-                    state["q_alpha"] = dist_info.q.alpha
-                elif dist_info.q.dist_type == "categorical":
+                if dist_info.q.dist_type == "categorical":
                     state["q_alpha"] = dist_info.q.alpha
                     state["q_log_alpha"] = dist_info.q.log_alpha
                     state["q_sample_log_probs"] = dist_info.q.sample_log_probs
@@ -282,10 +277,7 @@ class NMTLossCompute(LossComputeBase):
             q_alpha = q_alpha[gtruth.ne(self.padding_idx)]
             p_alpha = p_alpha.contiguous().view(-1, p_alpha.size(2))
             p_alpha = p_alpha[gtruth.ne(self.padding_idx)]
-            if self.dist_type == 'dirichlet':
-                q = Dir(q_alpha)
-                p = Dir(p_alpha)
-            elif self.dist_type == 'categorical':
+            if self.dist_type == 'categorical':
                 q = Cat(q_alpha)
                 p = Cat(p_alpha)
             else:

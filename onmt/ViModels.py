@@ -30,13 +30,10 @@ class InferenceNetwork(nn.Module):
 
         if dist_type == "none":
             self.mask_val = float("-inf")
-        elif dist_type == "dirichlet":
-            #self.mask_val = 1e-2
-            self.mask_val = math.exp(-10)
         elif dist_type == "categorical":
             self.mask_val = -float('inf')
         else:
-            raise Exception("IDK")
+            raise Exception("Invalid distribution type")
 
         if inference_network_type == 'embedding_only':
             self.src_encoder = MeanEncoder(src_layers, src_embeddings)
@@ -82,23 +79,7 @@ class InferenceNetwork(nn.Module):
         src_memory_bank = src_memory_bank.transpose(1,2) # batch_size, rnn_size, src_length
         tgt_memory_bank = tgt_memory_bank.transpose(0,1) # batch_size, tgt_length, rnn_size
 
-        if self.dist_type == "dirichlet":
-            scores = self.scoresF(torch.bmm(tgt_memory_bank, src_memory_bank))
-
-            # mask source attention
-            if src_lengths is not None:
-                mask = sequence_mask(src_lengths)
-                mask = mask.unsqueeze(1)
-                scores.data.masked_fill_(1-mask, self.mask_val)
-
-            # Make scores : T x N x S
-            scores = scores.transpose(0, 1)
-
-            scores = Params(
-                alpha=scores,
-                dist_type=self.dist_type,
-            )
-        elif self.dist_type == "categorical":
+        if self.dist_type == "categorical":
             scores = torch.bmm(tgt_memory_bank, src_memory_bank)
             # mask source attention
             assert (self.mask_val == -float('inf'))
@@ -138,31 +119,6 @@ class InferenceNetwork(nn.Module):
 
 
 class ViRNNDecoder(InputFeedRNNDecoder):
-    """
-    Input feeding based decoder. See :obj:`RNNDecoderBase` for options.
-
-    Based around the input feeding approach from
-    "Effective Approaches to Attention-based Neural Machine Translation"
-    :cite:`Luong2015`
-
-
-    .. mermaid::
-
-       graph BT
-          A[Input n-1]
-          AB[Input n]
-          subgraph RNN
-            E[Pos n-1]
-            F[Pos n]
-            E --> F
-          end
-          G[Encoder]
-          H[Memory_Bank n-1]
-          A --> E
-          AB --> F
-          E --> H
-          G --> H
-    """
     def __init__(self, *args, **kwargs):
         # Hack to get get subclassing working
         p_dist_type = kwargs.pop("p_dist_type")
@@ -171,7 +127,6 @@ class ViRNNDecoder(InputFeedRNNDecoder):
         scoresF = kwargs.pop("scoresF")
         n_samples = kwargs.pop("n_samples")
         mode = kwargs.pop("mode")
-        input_feed_type = kwargs.pop("input_feed_type")
         super(ViRNNDecoder, self).__init__(*args, **kwargs)
         self.attn = onmt.modules.VariationalAttention(
             src_dim         = self.memory_size,
@@ -183,7 +138,6 @@ class ViRNNDecoder(InputFeedRNNDecoder):
             scoresF         = scoresF,
             n_samples       = n_samples,
             mode            = mode,
-            input_feed_type = input_feed_type,
             attn_type       = kwargs["attn_type"],
         )
 
@@ -244,9 +198,6 @@ class ViRNNDecoder(InputFeedRNNDecoder):
                 memory_lengths=memory_lengths,
                 q_scores=q_scores_i)
 
-            # raw_scores: [batch x tgt_len x src_len]
-            #assert raw_scores.size() == (batch_size, 1, src_len)
-
             dist_infos += [dist_info]
             if self.context_gate is not None:
                 # TODO: context gate should be employed
@@ -257,7 +208,6 @@ class ViRNNDecoder(InputFeedRNNDecoder):
             decoder_output_c = self.dropout(decoder_output_c)
             input_feed = context_c
 
-            # do decoder_output_y later
             # decoder_output_y : K x N x H
             decoder_output_y = self.dropout(decoder_output_y)
 
@@ -306,24 +256,6 @@ class ViRNNDecoder(InputFeedRNNDecoder):
         return hidden, decoder_outputs, attns, dist_info, decoder_outputs_baseline
 
     def forward(self, tgt, memory_bank, state, memory_lengths=None, q_scores=None):
-        """
-        Args:
-            tgt (`LongTensor`): sequences of padded tokens
-                                `[tgt_len x batch x nfeats]`.
-            memory_bank (`FloatTensor`): vectors from the encoder
-                 `[src_len x batch x hidden]`.
-            state (:obj:`onmt.Models.DecoderState`):
-                 decoder state object to initialize the decoder
-            memory_lengths (`LongTensor`): the padded source lengths
-                `[batch]`.
-        Returns:
-            (`FloatTensor`,:obj:`onmt.Models.DecoderState`,`FloatTensor`):
-                * decoder_outputs: output from the decoder (after attn)
-                         `[tgt_len x batch x hidden]`.
-                * decoder_state: final hidden state from the decoder
-                * attns: distribution over src at each tgt
-                        `[tgt_len x batch x src_len]`.
-        """
         # Check
         assert isinstance(state, RNNDecoderState)
         tgt_len, tgt_batch, _ = tgt.size()
@@ -379,11 +311,11 @@ class ViNMTModel(nn.Module):
     Args:
       encoder (:obj:`EncoderBase`): an encoder object
       decoder (:obj:`RNNDecoderBase`): a decoder object
-      multi<gpu (bool): setup for multigpu support
+      multigpu (bool): setup for multigpu support
     """
     def __init__(
         self, encoder, decoder, inference_network,
-        multigpu=False, dist_type="dirichlet", dbg=False, use_prior=False,
+        multigpu=False, dist_type="categorical", dbg=False, use_prior=False,
         n_samples=1):
         self.multigpu = multigpu
         super(ViNMTModel, self).__init__()
@@ -485,5 +417,3 @@ class ViNMTModel(nn.Module):
             attns = None
 
         return decoder_outputs, attns, dec_state, dist_info, decoder_outputs_baseline
-        # p_a_scores: feed in sampled a, output unormalized attention scores
-        # # (batch_size, tgt_length, src_length)
