@@ -706,10 +706,9 @@ class Generator(nn.Module):
 
     def forward(self, input, log_pa=None, pa=None):
         # log_pa: T x N x S=K
-        #assert input.dim() == 4, "Need T x K x N x H"
         scores = F.log_softmax(self.proj(input), dim=-1)
         if input.dim() == 3:
-            # Shortcircuit
+            # Short-circuit
             return scores
         if scores.size(1) == 1:
             scores = scores.squeeze(1)
@@ -726,18 +725,3 @@ class Generator(nn.Module):
                 scores = self.logsumexp(scores, dim=1, keepdim=False)
                 scores = scores - math.log(input.size(1))
         return scores
-        """
-        scores = self.proj(input)
-        if scores.size(1) == 1:
-            scores = scores.squeeze(1)
-        else:
-            if self.mode == "enum" and log_pa is not None:
-                scores = F.log_softmax(scores, dim=-1)
-                scores = scores + log_pa.transpose(1,2).unsqueeze(-1)
-                scores = scores.exp().sum(1, keepdim=False)
-
-                return scores.log()
-            else:
-                scores = self.logsumexp(scores, dim=1, keepdim=False)
-        return F.log_softmax(scores, dim=-1)
-        """
