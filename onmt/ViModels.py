@@ -63,11 +63,8 @@ class InferenceNetwork(nn.Module):
             self.W = torch.nn.Linear(rnn_size, rnn_size, bias=False)
         self.rnn_size = rnn_size
 
-    def forward(self, src, tgt, src_lengths=None, src_precompute=None):
-        if src_precompute is None:
-            src_final, src_memory_bank = self.src_encoder(src, src_lengths)
-        else:
-            src_final, src_memory_bank = src_precompute
+    def forward(self, src, tgt, src_lengths=None):
+        src_final, src_memory_bank = self.src_encoder(src, src_lengths)
         src_length, batch_size, rnn_size = src_memory_bank.size()
 
         tgt_final, tgt_memory_bank = self.tgt_encoder(tgt)
@@ -395,13 +392,8 @@ class ViNMTModel(nn.Module):
         )
 
         if self.inference_network is not None and not self.use_prior:
-            SRC_PRECOMPUTE = False
-            # enc_final is unused anyway, lol
-            src_precompute = (enc_final, memory_bank.detach()) if SRC_PRECOMPUTE else None
-
             # inference network q(z|x,y)
-            q_scores = self.inference_network(src, inftgt, lengths, src_precompute) # batch_size, tgt_length, src_length
-            #q_scores[0].register_hook(lambda x: print(x.min().item(), x.max().item()))
+            q_scores = self.inference_network(src, inftgt, lengths) # batch_size, tgt_length, src_length
         else:
             q_scores = None
         decoder_outputs, dec_state, attns, dist_info, decoder_outputs_baseline = \

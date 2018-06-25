@@ -203,7 +203,7 @@ class Trainer(object):
 
                 if report_func is not None:
                     if idx % 1000 == -1 % 1000:
-                        print("|Param|: {}".format(sum([p.norm()**2 for p in self.model.parameters()]).data[0]**0.5).item())
+                        print("|Param|: {}".format(sum([p.norm()**2 for p in self.model.parameters()]).item()**0.5))
                     report_stats = report_func(
                             epoch, idx, num_batches,
                             self.progress_step,
