@@ -142,16 +142,6 @@ class Optim(object):
         else:
             self.best_ppl = ppl
 
-        """
-        if self.start_decay_at is not None and epoch >= self.start_decay_at:
-            self.start_decay = True
-        if self.last_ppl is not None and ppl > self.last_ppl:
-            self.start_decay = True
-
-        if self.start_decay:
-            self.lr = self.lr * self.lr_decay
-            print("Decaying learning rate to %g" % self.lr)
-        """
         self.last_ppl = ppl
         if self.method != 'sparseadam':
             self.optimizer.param_groups[0]['lr'] = self.lr
