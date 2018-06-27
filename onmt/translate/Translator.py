@@ -270,6 +270,11 @@ class Translator(object):
         enc_states, memory_bank = self.model.encoder(src, src_lengths)
         dec_states = self.model.decoder.init_decoder_state(
             src, memory_bank, enc_states)
+        # zero out
+        dec_states.hidden = (
+            dec_states.hidden[0].detach().fill_(0),
+            dec_states.hidden[1].detach().fill_(0),
+        )
 
         if src_lengths is None:
             src_lengths = torch.Tensor(batch_size).type_as(memory_bank.data)\
@@ -304,14 +309,30 @@ class Translator(object):
             inp = inp.unsqueeze(2)
 
             # Run one step.
-            dec_out, dec_states, attn = self.model.decoder(
-                inp, memory_bank, dec_states, memory_lengths=memory_lengths)
+            if isinstance(self.model, onmt.ViModels.ViNMTModel):
+                self.model.silent = True
+                self.model.use_prior = True
+                self.model.mode = "exact"
+                self.model.generator.mode = "exact"
+                # No Q
+                dec_out, dec_states, attn, dist_info, _ = self.model.decoder(
+                    inp, memory_bank, dec_states, memory_lengths=memory_lengths)
+            else:
+                dist_info = None
+                dec_out, dec_states, attn = self.model.decoder(
+                    inp, memory_bank, dec_states, memory_lengths=memory_lengths)
             dec_out = dec_out.squeeze(0)
             # dec_out: beam x rnn_size
 
             # (b) Compute a vector of batch x beam word scores.
             if not self.copy_attn:
-                out = self.model.generator.forward(dec_out).data
+                if isinstance(self.model, onmt.ViModels.ViNMTModel):
+                    dec_out = dec_out.unsqueeze(0)
+                    out = self.model.generator.forward(dec_out, log_pa=dist_info.p.log_alpha).data
+                    out = out.squeeze(0)
+                    # huh?
+                else:
+                    out = self.model.generator.forward(dec_out).data
                 out = unbottle(out)
                 # beam x tgt_vocab
                 beam_attn = unbottle(attn["std"])

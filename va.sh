@@ -160,15 +160,14 @@ eval_cat() {
 }
 
 gen_cat() {
-    model=$1
-    python train.py \
-        -data /n/rush_lab/users/yuntian/latent_attention/normal/data/iwslt_125_test \
-        -eval_with $model \
-        -save_model none -gpuid 0 -seed 131 -encoder_type brnn -batch_size 8 \
-        -accum_count 1 -valid_batch_size 2 -epochs 30 -inference_network_type brnn \
-        -p_dist_type categorical -q_dist_type categorical -alpha_transformation sm \
-        -global_attention mlp \
-        -optim adam -learning_rate 3e-4 -n_samples 1 -mode sample \
-        -eval_only 1
+    model=/n/rush_lab/jc/onmt-attn/iwslt14-de-en/models/model_cat_enum_b8_dbg/model_cat_enum_b8_dbg_acc_74.47_ppl_3.82_e7.pt
+    python translate.py \
+        -alpha 1 \
+        -src data/iwslt14-de-en/test.de.bpe \
+        -beam_size 10 \
+        -batch_size 2 \
+        -gpu 0 \
+        -output $model.out \
+        -model $model
 }
 

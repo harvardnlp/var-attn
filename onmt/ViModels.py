@@ -250,7 +250,7 @@ class ViRNNDecoder(InputFeedRNNDecoder):
             p=p_info,
         )
 
-        return hidden, decoder_outputs, attns, dist_info, decoder_outputs_baseline
+        return hidden, decoder_outputs, input_feed, attns, dist_info, decoder_outputs_baseline
 
     def forward(self, tgt, memory_bank, state, memory_lengths=None, q_scores=None):
         # Check
@@ -261,7 +261,7 @@ class ViRNNDecoder(InputFeedRNNDecoder):
         # END
 
         # Run the forward pass of the RNN.
-        decoder_final, decoder_outputs, attns, dist_info, decoder_outputs_baseline = self._run_forward_pass(
+        decoder_final, decoder_outputs, input_feed, attns, dist_info, decoder_outputs_baseline = self._run_forward_pass(
             tgt, memory_bank, state, memory_lengths=memory_lengths,
             q_scores=q_scores)
 
@@ -270,7 +270,7 @@ class ViRNNDecoder(InputFeedRNNDecoder):
         coverage = None
         if "coverage" in attns:
             coverage = attns["coverage"][-1].unsqueeze(0)
-        state.update_state(decoder_final, final_output.unsqueeze(0), coverage)
+        state.update_state(decoder_final, input_feed.unsqueeze(0), coverage)
 
         # Concatenates sequence of tensors along a new dimension.
         # T x K x N x H
@@ -323,6 +323,7 @@ class ViNMTModel(nn.Module):
         self.dbg = dbg
         self._use_prior = use_prior
         self._n_samples = n_samples
+        self.silent = False
 
     @property
     def use_prior(self):
@@ -349,7 +350,8 @@ class ViNMTModel(nn.Module):
     @mode.setter
     def mode(self, value):
         assert value in ["sample", "enum", "exact"]
-        print("switching mode to {}".format(value))
+        if not self.silent:
+            print("switching mode to {}".format(value))
         self.decoder.attn.mode = value
 
     def forward(self, src, tgt, lengths, dec_state=None):
