@@ -300,7 +300,7 @@ def train_model(model, fields, optim, data_type, model_opt):
             val_mode = 'enum'
         else:
             val_mode = model.mode
-        valid_stats = trainer.validate(valid_iter, mode)
+        valid_stats = trainer.validate(valid_iter, val_mode)
         print('Validation exp(elbo): %g' % valid_stats.expelbo())
         print('Validation perplexity: %g' % valid_stats.ppl())
         print('Validation xent: %g' % valid_stats.xent())
