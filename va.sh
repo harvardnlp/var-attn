@@ -34,7 +34,6 @@ train_cat_sample_b6() {
         -mode sample \
         -batch_size 6 \
         -encoder_type brnn \
-        -inference_network_type bigbrnn \
         -inference_network_rnn_size 1024 \
         -bridge \
         -src_word_vec_size 512 \
@@ -67,7 +66,6 @@ train_cat_enum_b6() {
         -mode enum \
         -batch_size 6 \
         -encoder_type brnn \
-        -inference_network_type bigbrnn \
         -inference_network_rnn_size 1024 \
         -bridge \
         -src_word_vec_size 512 \
@@ -101,7 +99,6 @@ train_exact_b6() {
         -use_generative_model 1 \
         -batch_size 6 \
         -encoder_type brnn \
-        -inference_network_type bigbrnn \
         -inference_network_rnn_size 1024 \
         -bridge \
         -src_word_vec_size 512 \
