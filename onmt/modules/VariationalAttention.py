@@ -40,7 +40,7 @@ class VariationalAttention(nn.Module):
             self.linear_in = nn.Linear(tgt_dim, src_dim, bias=False)
         elif self.attn_type == "mlp":
             self.linear_context = nn.Linear(src_dim, dim, bias=False)
-            self.linear_query = nn.Linear(dim, dim, bias=True)
+            self.linear_query = nn.Linear(tgt_dim, dim, bias=True)
             self.v = nn.Linear(dim, 1, bias=False)
         # mlp wants it with bias
         out_bias = self.attn_type == "mlp"
@@ -76,11 +76,11 @@ class VariationalAttention(nn.Module):
             return torch.bmm(h_t, h_s_)
         elif self.attn_type == "mlp":
             dim = self.dim
-            wq = self.linear_query(h_t.view(-1, dim))
+            wq = self.linear_query(h_t.view(-1, self.tgt_dim))
             wq = wq.view(tgt_batch, tgt_len, 1, dim)
             wq = wq.expand(tgt_batch, tgt_len, src_len, dim)
 
-            uh = self.linear_context(h_s.contiguous().view(-1, dim))
+            uh = self.linear_context(h_s.contiguous().view(-1, self.src_dim))
             uh = uh.view(src_batch, 1, src_len, dim)
             uh = uh.expand(src_batch, tgt_len, src_len, dim)
 

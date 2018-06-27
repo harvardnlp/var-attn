@@ -27,7 +27,7 @@ preprocess_bpe(){
 train_cat_sample_b6() {
     gpuid=0
     seed=131
-    name=model_cat_sample_b32
+    name=model_cat_sample_b6
     python train.py \
         -data $DATA \
         -save_model $name -gpuid $gpuid -seed $seed \
@@ -49,17 +49,18 @@ train_cat_sample_b6() {
         -p_dist_type categorical \
         -q_dist_type categorical \
         -alpha_transformation sm \
+        -global_attention mlp \
         -optim adam -learning_rate 3e-4 \
         -n_samples 1 \
         -start_decay_at 2 \
         -learning_rate_decay 0.5 \
-        -report_every 1000
+        -report_every 1000 | tee $name.log
 }
 
 train_cat_enum_b6() {
     gpuid=0
     seed=131
-    name=model_cat_sample_b32
+    name=model_cat_enum_b6
     python train.py \
         -data $DATA \
         -save_model $name -gpuid $gpuid -seed $seed \
@@ -81,17 +82,18 @@ train_cat_enum_b6() {
         -p_dist_type categorical \
         -q_dist_type categorical \
         -alpha_transformation sm \
+        -global_attention mlp \
         -optim adam -learning_rate 3e-4 \
         -n_samples 1 \
         -start_decay_at 2 \
         -learning_rate_decay 0.5 \
-        -report_every 1000
+        -report_every 1000 | tee $name.log
 }
 
 train_exact_b6() {
     gpuid=0
     seed=131
-    name=model_cat_sample_b32
+    name=model_exact_b6
     python train.py \
         -data $DATA \
         -save_model $name -gpuid $gpuid -seed $seed \
@@ -114,14 +116,50 @@ train_exact_b6() {
         -p_dist_type categorical \
         -q_dist_type categorical \
         -alpha_transformation sm \
+        -global_attention mlp \
         -optim adam -learning_rate 3e-4 \
         -n_samples 1 \
         -start_decay_at 2 \
         -learning_rate_decay 0.5 \
-        -report_every 1000
+        -report_every 1000 | tee $name.log
+}
+
+train_soft_b6() {
+    # The parameters for the soft model are slightly different
+    seed=131
+    name=model_soft_b6
+    gpuid=0
+    python train.py \
+        -data $DATA \
+        -save_model $name -gpuid $gpuid -seed $seed \
+        -src_word_vec_size 512 \
+        -tgt_word_vec_size 512 \
+        -memory_size 1024 \
+        -decoder_rnn_size 768 \
+        -attention_size 512 \
+        -bridge \
+        -encoder_type brnn -batch_size 6 \
+        -accum_count 1 -valid_batch_size 32 \
+        -epochs 30 -optim adam \
+        -learning_rate 3e-4 \
+        -global_attention mlp \
+        -report_every 1000 | tee $name.log
 }
 
 eval_cat() {
+    model=$1
+    python train.py \
+        -data /n/rush_lab/users/yuntian/latent_attention/normal/data/iwslt_125_test \
+        -eval_with $model \
+        -save_model none -gpuid 0 -seed 131 -encoder_type brnn -batch_size 8 \
+        -accum_count 1 -valid_batch_size 2 -epochs 30 -inference_network_type brnn \
+        -p_dist_type categorical -q_dist_type categorical -alpha_transformation sm \
+        -global_attention mlp \
+        -optim adam -learning_rate 3e-4 -n_samples 1 -mode sample \
+        -eval_only 1
+}
+
+gen_cat() {
     model=$1
     python train.py \
         -data /n/rush_lab/users/yuntian/latent_attention/normal/data/iwslt_125_test \

@@ -58,23 +58,25 @@ class GlobalAttention(nn.Module):
        attn_type (str): type of attention to use, options [dot,general,mlp]
 
     """
-    def __init__(self, dim, coverage=False, attn_type="dot"):
+    def __init__(self, src_dim, tgt_dim, attn_dim, coverage=False, attn_type="dot"):
         super(GlobalAttention, self).__init__()
 
-        self.dim = dim
+        self.src_dim = src_dim
+        self.tgt_dim = tgt_dim
+        self.dim = attn_dim
         self.attn_type = attn_type
         assert (self.attn_type in ["dot", "general", "mlp"]), (
                 "Please select a valid attention type.")
 
         if self.attn_type == "general":
-            self.linear_in = nn.Linear(dim, dim, bias=False)
+            self.linear_in = nn.Linear(tgt_dim, src_dim, bias=False)
         elif self.attn_type == "mlp":
-            self.linear_context = nn.Linear(dim, dim, bias=False)
-            self.linear_query = nn.Linear(dim, dim, bias=True)
-            self.v = nn.Linear(dim, 1, bias=False)
+            self.linear_context = nn.Linear(src_dim, attn_dim, bias=False)
+            self.linear_query = nn.Linear(tgt_dim, attn_dim, bias=True)
+            self.v = nn.Linear(attn_dim, 1, bias=False)
         # mlp wants it with bias
         out_bias = self.attn_type == "mlp"
-        self.linear_out = nn.Linear(dim*2, dim, bias=out_bias)
+        self.linear_out = nn.Linear(src_dim + tgt_dim, tgt_dim, bias=out_bias)
 
         self.sm = nn.Softmax(dim=-1)
         self.tanh = nn.Tanh()
@@ -99,8 +101,6 @@ class GlobalAttention(nn.Module):
         src_batch, src_len, src_dim = h_s.size()
         tgt_batch, tgt_len, tgt_dim = h_t.size()
         aeq(src_batch, tgt_batch)
-        aeq(src_dim, tgt_dim)
-        aeq(self.dim, src_dim)
 
         if self.attn_type in ["general", "dot"]:
             if self.attn_type == "general":
@@ -112,11 +112,11 @@ class GlobalAttention(nn.Module):
             return torch.bmm(h_t, h_s_)
         else:
             dim = self.dim
-            wq = self.linear_query(h_t.view(-1, dim))
+            wq = self.linear_query(h_t.view(-1, self.tgt_dim))
             wq = wq.view(tgt_batch, tgt_len, 1, dim)
             wq = wq.expand(tgt_batch, tgt_len, src_len, dim)
 
-            uh = self.linear_context(h_s.contiguous().view(-1, dim))
+            uh = self.linear_context(h_s.contiguous().view(-1, self.src_dim))
             uh = uh.view(src_batch, 1, src_len, dim)
             uh = uh.expand(src_batch, tgt_len, src_len, dim)
 
@@ -152,8 +152,7 @@ class GlobalAttention(nn.Module):
         batch, sourceL, dim = memory_bank.size()
         batch_, targetL, dim_ = input.size()
         aeq(batch, batch_)
-        aeq(dim, dim_)
-        aeq(self.dim, dim)
+
         if coverage is not None:
             batch_, sourceL_ = coverage.size()
             aeq(batch, batch_)
@@ -181,19 +180,19 @@ class GlobalAttention(nn.Module):
         c = torch.bmm(align_vectors, memory_bank)
 
         # concatenate
-        concat_c = torch.cat([c, input], 2).view(batch*targetL, dim*2)
-        attn_h = self.linear_out(concat_c).view(batch, targetL, dim)
+        concat_c = torch.cat([c, input], -1)
+        attn_h = self.linear_out(concat_c)
         if self.attn_type in ["general", "dot"]:
             attn_h = self.tanh(attn_h)
 
         if one_step:
             attn_h = attn_h.squeeze(1)
             align_vectors = align_vectors.squeeze(1)
+            c = c.squeeze(1)
 
             # Check output sizes
             batch_, dim_ = attn_h.size()
             aeq(batch, batch_)
-            aeq(dim, dim_)
             batch_, sourceL_ = align_vectors.size()
             aeq(batch, batch_)
             aeq(sourceL, sourceL_)
@@ -211,4 +210,4 @@ class GlobalAttention(nn.Module):
             aeq(batch, batch_)
             aeq(sourceL, sourceL_)
 
-        return attn_h, align_vectors
+        return attn_h, align_vectors, c

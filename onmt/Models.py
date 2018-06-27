@@ -276,8 +276,11 @@ class RNNDecoderBase(nn.Module):
         # Set up the standard attention.
         self._coverage = coverage_attn
         self.attn = onmt.modules.GlobalAttention(
-            hidden_size, coverage=coverage_attn,
-            attn_type=attn_type
+            src_dim = memory_size,
+            tgt_dim = hidden_size,
+            attn_dim = attn_size,
+            coverage=coverage_attn,
+            attn_type=attn_type,
         )
 
         # Set up a separated copy attention layer, if needed.
@@ -501,7 +504,7 @@ class InputFeedRNNDecoder(RNNDecoderBase):
             decoder_input = torch.cat([emb_t, input_feed], 1)
 
             rnn_output, hidden = self.rnn(decoder_input, hidden)
-            decoder_output, p_attn = self.attn(
+            decoder_output, p_attn, input_feed = self.attn(
                 rnn_output,
                 memory_bank.transpose(0, 1),
                 memory_lengths=memory_lengths)
@@ -512,7 +515,7 @@ class InputFeedRNNDecoder(RNNDecoderBase):
                     decoder_input, rnn_output, decoder_output
                 )
             decoder_output = self.dropout(decoder_output)
-            input_feed = decoder_output
+            #input_feed = decoder_output
 
             decoder_outputs += [decoder_output]
             attns["std"] += [p_attn]
@@ -595,6 +598,10 @@ class NMTModel(nn.Module):
         enc_final, memory_bank = self.encoder(src, lengths)
         enc_state = \
             self.decoder.init_decoder_state(src, memory_bank, enc_final)
+        enc_state.hidden = (
+            enc_state.hidden[0].detach().fill_(0),
+            enc_state.hidden[1].detach().fill_(0),
+        )
         decoder_outputs, dec_state, attns = \
             self.decoder(tgt, memory_bank,
                          enc_state if dec_state is None

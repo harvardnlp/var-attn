@@ -16,6 +16,7 @@ pip install -r requirements.txt
 ## Running the code
 All commands are in the script `va.sh`.
 
+### Preprocessing the data
 To preprocess the data, run
 ```bash
 source va.sh && preprocess_bpe
