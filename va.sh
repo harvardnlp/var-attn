@@ -26,7 +26,7 @@ preprocess_bpe(){
 
 train_cat_sample_b6() {
     gpuid=0
-    seed=131
+    seed=3435
     name=model_cat_sample_b6
     python train.py \
         -data $DATA \
@@ -36,7 +36,6 @@ train_cat_sample_b6() {
         -encoder_type brnn \
         -inference_network_type bigbrnn \
         -inference_network_rnn_size 1024 \
-        -bridge \
         -src_word_vec_size 512 \
         -tgt_word_vec_size 512 \
         -memory_size 1024 \
@@ -69,7 +68,6 @@ train_cat_enum_b6() {
         -encoder_type brnn \
         -inference_network_type bigbrnn \
         -inference_network_rnn_size 1024 \
-        -bridge \
         -src_word_vec_size 512 \
         -tgt_word_vec_size 512 \
         -memory_size 1024 \
@@ -103,7 +101,6 @@ train_exact_b6() {
         -encoder_type brnn \
         -inference_network_type bigbrnn \
         -inference_network_rnn_size 1024 \
-        -bridge \
         -src_word_vec_size 512 \
         -tgt_word_vec_size 512 \
         -memory_size 1024 \
@@ -126,7 +123,7 @@ train_exact_b6() {
 
 train_soft_b6() {
     # The parameters for the soft model are slightly different
-    seed=131
+    seed=3435
     name=model_soft_b6
     gpuid=0
     python train.py \
@@ -137,7 +134,6 @@ train_soft_b6() {
         -memory_size 1024 \
         -decoder_rnn_size 768 \
         -attention_size 512 \
-        -bridge \
         -encoder_type brnn -batch_size 6 \
         -accum_count 1 -valid_batch_size 32 \
         -epochs 30 -optim adam \
@@ -189,7 +185,6 @@ soft_dbg() {
         -memory_size 8 \
         -decoder_rnn_size 4 \
         -attention_size 4 \
-        -bridge \
         -encoder_type brnn -batch_size 6 \
         -accum_count 1 -valid_batch_size 32 \
         -epochs 30 -optim adam \

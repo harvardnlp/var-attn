@@ -388,10 +388,6 @@ class ViNMTModel(nn.Module):
         enc_final, memory_bank = self.encoder(src, lengths)
         enc_state = self.decoder.init_decoder_state(
             src, memory_bank, enc_final)
-        enc_state.hidden = (
-            enc_state.hidden[0].detach().fill_(0),
-            enc_state.hidden[1].detach().fill_(0),
-        )
 
         if self.inference_network is not None and not self.use_prior:
             # inference network q(z|x,y)

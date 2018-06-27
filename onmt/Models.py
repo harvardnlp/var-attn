@@ -346,9 +346,17 @@ class RNNDecoderBase(nn.Module):
             return h
 
         if isinstance(encoder_final, tuple):  # LSTM
+            # Zero out initial hidden state
+            L = self.rnn.num_layers
+            N = encoder_final[0].size(1)
+            H = self.rnn.hidden_size
             return RNNDecoderState(self.hidden_size,
-                                   tuple([_fix_enc_hidden(enc_hid)
-                                         for enc_hid in encoder_final]),
+                                   #tuple([_fix_enc_hidden(enc_hid)
+                                         #for enc_hid in encoder_final]),
+                                   (
+                                        torch.zeros(L, N, H).to(encoder_final[0]),
+                                        torch.zeros(L, N, H).to(encoder_final[0]),
+                                   ),
                                    self.memory_size)
         else:  # GRU
             return RNNDecoderState(self.hidden_size,
@@ -612,10 +620,7 @@ class NMTModel(nn.Module):
         self.enc_h = memory_bank
         enc_state = \
             self.decoder.init_decoder_state(src, memory_bank, enc_final)
-        enc_state.hidden = (
-            enc_state.hidden[0].detach().fill_(0),
-            enc_state.hidden[1].detach().fill_(0),
-        )
+
         decoder_outputs, dec_state, attns = \
             self.decoder(tgt, memory_bank,
                          enc_state if dec_state is None
