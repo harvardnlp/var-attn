@@ -44,7 +44,7 @@ train_cat_sample_b6() {
         -accum_count 1 \
         -valid_batch_size 2 \
         -epochs 30 \
-        -inference_network_type brnn \
+        -inference_network_type bigbrnn \
         -p_dist_type categorical \
         -q_dist_type categorical \
         -alpha_transformation sm \
@@ -76,7 +76,7 @@ train_cat_enum_b6() {
         -accum_count 1 \
         -valid_batch_size 2 \
         -epochs 30 \
-        -inference_network_type brnn \
+        -inference_network_type bigbrnn \
         -p_dist_type categorical \
         -q_dist_type categorical \
         -alpha_transformation sm \
@@ -109,7 +109,7 @@ train_exact_b6() {
         -accum_count 1 \
         -valid_batch_size 2 \
         -epochs 30 \
-        -inference_network_type brnn \
+        -inference_network_type bigbrnn \
         -p_dist_type categorical \
         -q_dist_type categorical \
         -alpha_transformation sm \
@@ -149,7 +149,7 @@ eval_cat() {
         -data /n/rush_lab/users/yuntian/latent_attention/normal/data/iwslt_125_test \
         -eval_with $model \
         -save_model none -gpuid 0 -seed 131 -encoder_type brnn -batch_size 8 \
-        -accum_count 1 -valid_batch_size 2 -epochs 30 -inference_network_type brnn \
+        -accum_count 1 -valid_batch_size 2 -epochs 30 -inference_network_type bigbrnn \
         -p_dist_type categorical -q_dist_type categorical -alpha_transformation sm \
         -global_attention mlp \
         -optim adam -learning_rate 3e-4 -n_samples 1 -mode sample \
