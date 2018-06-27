@@ -142,6 +142,7 @@ train_soft_b6() {
         -accum_count 1 -valid_batch_size 32 \
         -epochs 30 -optim adam \
         -learning_rate 3e-4 \
+        -start_decay_at 2 \
         -global_attention mlp \
         -report_every 1000 | tee $name.log
 }
@@ -160,7 +161,10 @@ eval_cat() {
 }
 
 gen_cat() {
+    # VAE Enum
     model=/n/rush_lab/jc/onmt-attn/iwslt14-de-en/models/model_cat_enum_b8_dbg/model_cat_enum_b8_dbg_acc_74.47_ppl_3.82_e7.pt
+    # VAE Sample
+    model=/n/rush_lab/jc/onmt-attn/iwslt14-de-en/models/model_cat_sample_b8_dbg/model_cat_sample_b8_dbg_acc_73.44_ppl_3.94_e15.pt
     python translate.py \
         -alpha 1 \
         -src data/iwslt14-de-en/test.de.bpe \
@@ -170,4 +174,28 @@ gen_cat() {
         -output $model.out \
         -model $model
 }
+# sed "s/@@ //g" /n/rush_lab/jc/onmt-attn/iwslt14-de-en/models/model_cat_enum_b8_dbg/model_cat_enum_b8_dbg_acc_74.47_ppl_3.82_e7.pt.out | perl tools/multi-bleu.perl data/iwslt14-de-en/test.en
 
+soft_dbg() {
+    # The parameters for the soft model are slightly different
+    seed=131
+    name=model_soft_b6
+    gpuid=0
+    python -m pdb train.py \
+        -data $DATA \
+        -save_model $name -gpuid $gpuid -seed $seed \
+        -src_word_vec_size 4 \
+        -tgt_word_vec_size 4 \
+        -memory_size 8 \
+        -decoder_rnn_size 4 \
+        -attention_size 4 \
+        -bridge \
+        -encoder_type brnn -batch_size 6 \
+        -accum_count 1 -valid_batch_size 32 \
+        -epochs 30 -optim adam \
+        -learning_rate 3e-4 \
+        -start_decay_at 2 \
+        -global_attention mlp \
+        -dropout 0 \
+        -report_every 1000
+}

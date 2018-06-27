@@ -72,7 +72,7 @@ class GlobalAttention(nn.Module):
             self.linear_in = nn.Linear(tgt_dim, src_dim, bias=False)
         elif self.attn_type == "mlp":
             self.linear_context = nn.Linear(src_dim, attn_dim, bias=False)
-            self.linear_query = nn.Linear(tgt_dim, attn_dim, bias=True)
+            self.linear_query = nn.Linear(tgt_dim, attn_dim, bias=False)
             self.v = nn.Linear(attn_dim, 1, bias=False)
         # mlp wants it with bias
         out_bias = self.attn_type == "mlp"
@@ -165,7 +165,7 @@ class GlobalAttention(nn.Module):
 
         # compute attention scores, as in Luong et al.
         align = self.score(input, memory_bank)
-
+        self.p_attn_score = align
         if memory_lengths is not None:
             mask = sequence_mask(memory_lengths)
             mask = mask.unsqueeze(1)  # Make it broadcastable.
@@ -180,9 +180,11 @@ class GlobalAttention(nn.Module):
         c = torch.bmm(align_vectors, memory_bank)
 
         # concatenate
-        concat_c = torch.cat([c, input], -1)
+        #concat_c = torch.cat([c, input], -1)
+        concat_c = torch.cat([input, c], -1)
         attn_h = self.linear_out(concat_c)
-        if self.attn_type in ["general", "dot"]:
+        #if self.attn_type in ["general", "dot"]:
+        if True or self.attn_type in ["general", "dot"]:
             attn_h = self.tanh(attn_h)
 
         if one_step:

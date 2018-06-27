@@ -141,7 +141,7 @@ class RNNEncoder(EncoderBase):
 
         emb = self.embeddings(src)
         s_len, batch, emb_dim = emb.size()
-
+        self.emb_h = emb
         packed_emb = emb
         if lengths is not None and not self.no_pack_padded_seq:
             # Lengths data is wrapped inside a Variable.
@@ -499,15 +499,27 @@ class InputFeedRNNDecoder(RNNDecoderBase):
 
         # Input feed concatenates hidden state with
         # input at every time step.
+        # DBG
+        self.p_attn_score = []
+        self.dec_h = []
+        self.src_context = []
+        self.context = []
         for i, emb_t in enumerate(emb.split(1)):
             emb_t = emb_t.squeeze(0)
             decoder_input = torch.cat([emb_t, input_feed], 1)
 
-            rnn_output, hidden = self.rnn(decoder_input, hidden)
+            rnn_output, hidden = self.rnn(decoder_input.unsqueeze(0), hidden)
+            rnn_output = rnn_output.squeeze(0)
             decoder_output, p_attn, input_feed = self.attn(
                 rnn_output,
                 memory_bank.transpose(0, 1),
                 memory_lengths=memory_lengths)
+            # DBG
+            self.dec_h.append(rnn_output)
+            self.p_attn_score.append(self.attn.p_attn_score)
+            self.src_context.append(input_feed)
+            self.context.append(decoder_output)
+
             if self.context_gate is not None:
                 # TODO: context gate should be employed
                 # instead of second RNN transform.
@@ -544,8 +556,8 @@ class InputFeedRNNDecoder(RNNDecoderBase):
             stacked_cell = onmt.modules.StackedLSTM
         else:
             stacked_cell = onmt.modules.StackedGRU
-        return stacked_cell(num_layers, input_size,
-                            hidden_size, dropout)
+        return nn.LSTM(num_layers=num_layers, input_size=input_size,
+                       hidden_size=hidden_size, dropout=dropout)
 
     @property
     def _input_size(self):
@@ -596,6 +608,8 @@ class NMTModel(nn.Module):
         tgt = tgt[:-1]  # exclude last target from inputs
 
         enc_final, memory_bank = self.encoder(src, lengths)
+        self.src_emb_h = self.encoder.emb_h
+        self.enc_h = memory_bank
         enc_state = \
             self.decoder.init_decoder_state(src, memory_bank, enc_final)
         enc_state.hidden = (
@@ -715,6 +729,7 @@ class Generator(nn.Module):
         # log_pa: T x N x S=K
         scores = F.log_softmax(self.proj(input), dim=-1)
         if input.dim() == 3:
+            self.vocab_score = self.proj(input)
             # Short-circuit
             return scores
         if scores.size(1) == 1:
