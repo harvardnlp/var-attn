@@ -179,6 +179,7 @@ class ViRNNDecoder(InputFeedRNNDecoder):
             emb_t = emb_t.squeeze(0)
             decoder_input = torch.cat([emb_t, input_feed], 1)
 
+            # decoder_input.unsqueeze(0)?
             rnn_output, hidden = self.rnn(decoder_input, hidden)
             if q_scores is not None:
                 # map over tensor-like keys

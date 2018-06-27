@@ -22,10 +22,10 @@ import onmt.modules
 from onmt.Utils import use_gpu
 import onmt.opts
 
-from models_attn_var2 import AttnNetwork
+#from models_attn_var2 import AttnNetwork
 
 # Turn off cudnn
-torch.backends.cudnn.enabled = False
+#torch.backends.cudnn.enabled = False
 
 parser = argparse.ArgumentParser(
     description='train.py',
@@ -536,19 +536,6 @@ def main():
     # Report src/tgt features.
     collect_report_features(fields)
 
-    # DBG MODEL
-    dbg_model = AttnNetwork(
-        src_vocab=len(fields["src"].vocab),
-        tgt_vocab=len(fields["tgt"].vocab),
-        word_dim=opt.src_word_vec_size,
-        h_dim=4,
-        dec_h_dim=opt.decoder_rnn_size,
-        num_layers=2,
-        dropout=0,
-        mode="soft",
-    )
-    print(dbg_model)
-    print(tally_parameters(dbg_model))
     # Build model.
     model = build_model(model_opt, opt, fields, checkpoint)
     # Remove bridge for tally params
@@ -556,8 +543,21 @@ def main():
 
     tally_parameters(model)
     check_save_model_path()
+    """
+    # DBG MODEL
+    dbg_model = AttnNetwork(
+        src_vocab=len(fields["src"].vocab),
+        tgt_vocab=len(fields["tgt"].vocab),
+        word_dim=opt.src_word_vec_size,
+        h_dim=opt.memory_size // 2,
+        dec_h_dim=opt.decoder_rnn_size,
+        num_layers=2,
+        dropout=0,
+        mode="soft",
+    )
+    print(dbg_model)
+    print(tally_parameters(dbg_model))
     dbg_model.cuda()
-
     # emb
     def copy_module(a, b):
         for n, p in b.named_parameters():
@@ -612,6 +612,7 @@ def main():
     nll2 = F.nll_loss(out2.view(-1, 8876), tgt[1:].view(-1), size_average=False) / 2
     nll2.backward()
     """
+    """
     print("src_emb_h diff: {}".format((model.src_emb_h - dbg_model.src_emb_h.transpose(0,1)).abs().max()))
     print("enc_h diff: {}".format((model.enc_h - dbg_model.enc_h.transpose(0,1)).abs().max()))
     print("attn diff: {}".format((model.decoder.p_attn_score[0] - dbg_model.p_attn_score[0].squeeze(1)).abs().max()))
@@ -619,6 +620,7 @@ def main():
     print("dec_h diff: {}".format((model.decoder.dec_h[0] - dbg_model.dec_h[0].squeeze(1)).abs().max()))
     print("decout diff: {}".format((model.decoder.context[0] - dbg_model.context[0].squeeze(1)).abs().max()))
     print("vocab_score diff: {}".format((model.generator.vocab_score[0] - dbg_model.vocab_score[0].squeeze(1)).abs().max()))
+    """
     """
     print("log_prob diff: {}".format(log_prob2 - dbg_model.log_prob.t()))
 
@@ -632,8 +634,8 @@ def main():
 
     print("src_emb grad diff: {}".format((model.encoder.embeddings.make_embedding.emb_luts[0].weight.grad - dbg_model.enc_emb.weight.grad).abs().max()))
     print("tgt_emb grad diff: {}".format((model.decoder.embeddings.make_embedding.emb_luts[0].weight.grad - dbg_model.dec_emb.weight.grad).abs().max()))
+    """
 
-    import pdb; pdb.set_trace()
     # Build optimizer.
     optim = build_optim(model, checkpoint)
 

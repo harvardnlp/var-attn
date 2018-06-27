@@ -172,6 +172,8 @@ gen_cat() {
 }
 # sed "s/@@ //g" /n/rush_lab/jc/onmt-attn/iwslt14-de-en/models/model_cat_enum_b8_dbg/model_cat_enum_b8_dbg_acc_74.47_ppl_3.82_e7.pt.out | perl tools/multi-bleu.perl data/iwslt14-de-en/test.en
 
+### DEBUG
+
 soft_dbg() {
     # The parameters for the soft model are slightly different
     seed=131
@@ -193,4 +195,72 @@ soft_dbg() {
         -global_attention mlp \
         -dropout 0 \
         -report_every 1000
+}
+
+train_soft_b8_dbg() {
+    # The parameters for the soft model are slightly different
+    seed=3435
+    name=model_soft_b8_dbg
+    gpuid=0
+    python train.py \
+        -data $DATA \
+        -save_model $name -gpuid $gpuid -seed $seed \
+        -src_word_vec_size 512 \
+        -tgt_word_vec_size 512 \
+        -memory_size 1024 \
+        -decoder_rnn_size 768 \
+        -attention_size 512 \
+        -encoder_type brnn -batch_size 8 \
+        -accum_count 1 -valid_batch_size 32 \
+        -epochs 30 -optim adam \
+        -learning_rate 3e-4 \
+        -start_decay_at 2 \
+        -global_attention mlp \
+        -dropout 0 \
+        -report_every 1000 | tee $name.log
+}
+
+yoon_soft() {
+    PYTHONPATH=/n/rush_lab/users/yoonkim/seq2seq-py \
+        python train_attn_var2.py \
+        --gpu 0 \
+        --checkpoint_path yoon-chp.pt \
+        --print_every 1000 \
+        --attn soft \
+        --dropout 0
+}
+
+train_soft_b32_dbg() {
+    # The parameters for the soft model are slightly different
+    seed=3435
+    name=model_soft_b32_dbg
+    gpuid=0
+    python train.py \
+        -data $DATA \
+        -save_model $name -gpuid $gpuid -seed $seed \
+        -src_word_vec_size 512 \
+        -tgt_word_vec_size 512 \
+        -memory_size 1024 \
+        -decoder_rnn_size 768 \
+        -attention_size 512 \
+        -encoder_type brnn -batch_size 32 \
+        -accum_count 1 -valid_batch_size 32 \
+        -epochs 30 -optim adam \
+        -learning_rate 3e-4 \
+        -start_decay_at 2 \
+        -global_attention mlp \
+        -dropout 0 \
+        -report_every 500 | tee $name.log
+}
+
+yoon_soft_b32() {
+    PYTHONPATH=/n/rush_lab/users/yoonkim/seq2seq-py \
+        python train_attn_var2.py \
+        --train_file /n/rush_lab/users/yoonkim/seq2seq-py/data/bpe/iwslt-bpe-batch32-train.hdf5 \
+        --val_file /n/rush_lab/users/yoonkim/seq2seq-py/data/bpe/iwslt-bpe-batch32-val.hdf5 \
+        --gpu 0 \
+        --checkpoint_path yoon-chp-b32.pt \
+        --print_every 500 \
+        --attn soft \
+        --dropout 0
 }
