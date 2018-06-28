@@ -161,8 +161,8 @@ gen_cat() {
     model=/n/rush_lab/jc/onmt-attn/iwslt14-de-en/models/model_cat_sample_b8_dbg/model_cat_sample_b8_dbg_acc_73.44_ppl_3.94_e15.pt
     # Soft
     model=model_soft_b8_dbg_acc_63.16_ppl_7.29_e8.pt
-    python translate.py \
-        -alpha 1 \
+        #-alpha 1 \
+    python -m pdb translate.py \
         -src data/iwslt14-de-en/test.de.bpe \
         -beam_size 10 \
         -batch_size 2 \

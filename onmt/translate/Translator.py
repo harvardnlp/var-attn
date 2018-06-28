@@ -326,14 +326,13 @@ class Translator(object):
 
             # (b) Compute a vector of batch x beam word scores.
             if not self.copy_attn:
+                dec_out = dec_out.unsqueeze(0)
                 if isinstance(self.model, onmt.ViModels.ViNMTModel):
-                    dec_out = dec_out.unsqueeze(0)
                     out = self.model.generator.forward(dec_out, log_pa=dist_info.p.log_alpha).data
-                    out = out.squeeze(0)
                     # huh?
                 else:
                     out = self.model.generator.forward(dec_out).data
-                out = unbottle(out)
+                out = unbottle(out.squeeze(0))
                 # beam x tgt_vocab
                 beam_attn = unbottle(attn["std"])
             else:

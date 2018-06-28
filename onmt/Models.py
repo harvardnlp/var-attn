@@ -320,7 +320,7 @@ class RNNDecoderBase(nn.Module):
         # END
 
         # Run the forward pass of the RNN.
-        decoder_final, decoder_outputs, attns = self._run_forward_pass(
+        decoder_final, decoder_outputs, input_feed, attns = self._run_forward_pass(
             tgt, memory_bank, state, memory_lengths=memory_lengths)
 
         # Update the state with the result.
@@ -328,7 +328,7 @@ class RNNDecoderBase(nn.Module):
         coverage = None
         if "coverage" in attns:
             coverage = attns["coverage"][-1].unsqueeze(0)
-        state.update_state(decoder_final, final_output.unsqueeze(0), coverage)
+        state.update_state(decoder_final, input_feed.unsqueeze(0), coverage)
 
         # Concatenates sequence of tensors along a new dimension.
         decoder_outputs = torch.stack(decoder_outputs)
@@ -554,7 +554,7 @@ class InputFeedRNNDecoder(RNNDecoderBase):
             elif self._copy:
                 attns["copy"] = attns["std"]
         # Return result.
-        return hidden, decoder_outputs, attns
+        return hidden, decoder_outputs, input_feed, attns
 
     def _build_rnn(self, rnn_type, input_size,
                    hidden_size, num_layers, dropout):
