@@ -4,7 +4,7 @@ DATATEST=data/iwslt/iwslt_125_test
 
 preprocess_bpe(){
     # Preprocesses the data in data/iwslt14-de-en
-    # Since we are using BPE, we do not force an unks.
+    # Since we are using BPE, we do not force any unks.
     mkdir data/iwslt
     python preprocess.py \
         -train_src ${TEXT}/train.de.bpe -train_tgt ${TEXT}/train.en.bpe \
@@ -142,6 +142,7 @@ train_soft_b6() {
 
 eval_cat() {
     model=$1
+    model=model_soft_b8_dbg_acc_63.16_ppl_7.29_e8.pt
     python train.py \
         -data /n/rush_lab/users/yuntian/latent_attention/normal/data/iwslt_125_test \
         -eval_with $model \
@@ -158,6 +159,8 @@ gen_cat() {
     model=/n/rush_lab/jc/onmt-attn/iwslt14-de-en/models/model_cat_enum_b8_dbg/model_cat_enum_b8_dbg_acc_74.47_ppl_3.82_e7.pt
     # VAE Sample
     model=/n/rush_lab/jc/onmt-attn/iwslt14-de-en/models/model_cat_sample_b8_dbg/model_cat_sample_b8_dbg_acc_73.44_ppl_3.94_e15.pt
+    # Soft
+    model=model_soft_b8_dbg_acc_63.16_ppl_7.29_e8.pt
     python translate.py \
         -alpha 1 \
         -src data/iwslt14-de-en/test.de.bpe \
@@ -211,6 +214,29 @@ train_soft_b8_dbg() {
         -accum_count 1 -valid_batch_size 32 \
         -epochs 30 -optim adam \
         -learning_rate 3e-4 \
+        -adam_eps 1e-6  \
+        -start_decay_at 2 \
+        -global_attention mlp \
+        -report_every 1000 | tee $name.log
+}
+
+train_soft_b8_dbg_adam() {
+    # The parameters for the soft model are slightly different
+    seed=3435
+    name=model_soft_b8_dbg_adam
+    gpuid=0
+    python train.py \
+        -data $DATA \
+        -save_model $name -gpuid $gpuid -seed $seed \
+        -src_word_vec_size 512 \
+        -tgt_word_vec_size 512 \
+        -memory_size 1024 \
+        -decoder_rnn_size 768 \
+        -attention_size 512 \
+        -encoder_type brnn -batch_size 8 \
+        -accum_count 1 -valid_batch_size 32 \
+        -epochs 30 -optim adam \
+        -learning_rate 3e-4 \
         -start_decay_at 2 \
         -global_attention mlp \
         -report_every 1000 | tee $name.log
@@ -242,6 +268,29 @@ train_soft_b32_dbg() {
         -accum_count 1 -valid_batch_size 32 \
         -epochs 30 -optim adam \
         -learning_rate 3e-4 \
+        -start_decay_at 2 \
+        -global_attention mlp \
+        -report_every 500 | tee $name.log
+}
+
+train_soft_b32_dbg_adam() {
+    # The parameters for the soft model are slightly different
+    seed=3435
+    name=model_soft_b32_dbg_adam
+    gpuid=0
+    python train.py \
+        -data $DATA \
+        -save_model $name -gpuid $gpuid -seed $seed \
+        -src_word_vec_size 512 \
+        -tgt_word_vec_size 512 \
+        -memory_size 1024 \
+        -decoder_rnn_size 768 \
+        -attention_size 512 \
+        -encoder_type brnn -batch_size 32 \
+        -accum_count 1 -valid_batch_size 32 \
+        -epochs 30 -optim adam \
+        -learning_rate 3e-4 \
+        -adam_eps 1e-6 \
         -start_decay_at 2 \
         -global_attention mlp \
         -report_every 500 | tee $name.log

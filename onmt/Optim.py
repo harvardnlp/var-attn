@@ -46,7 +46,7 @@ class Optim(object):
     # established value, so we use that here as well
     def __init__(self, method, lr, max_grad_norm,
                  lr_decay=1, start_decay_at=None,
-                 beta1=0.9, beta2=0.999,
+                 beta1=0.9, beta2=0.999, eps=1e-9,
                  adagrad_accum=0.0,
                  decay_method=None,
                  warmup_steps=4000,
@@ -62,6 +62,7 @@ class Optim(object):
         self.start_decay = False
         self._step = 0
         self.betas = [beta1, beta2]
+        self.eps = eps
         self.adagrad_accum = adagrad_accum
         self.decay_method = decay_method
         self.warmup_steps = warmup_steps
@@ -89,7 +90,7 @@ class Optim(object):
             self.optimizer = optim.Adadelta(self.params, lr=self.lr)
         elif self.method == 'adam':
             self.optimizer = optim.Adam(self.params, lr=self.lr,
-                                        betas=self.betas, eps=1e-9)
+                                        betas=self.betas, eps=self.eps)
         elif self.method == 'sparseadam':
             self.optimizer = MultipleOptimizer(
                 [optim.Adam(self.params, lr=self.lr,

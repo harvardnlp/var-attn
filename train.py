@@ -437,6 +437,7 @@ def build_optim(model, checkpoint):
             start_decay_at=opt.start_decay_at,
             beta1=opt.adam_beta1,
             beta2=opt.adam_beta2,
+            eps=opt.adam_eps,
             adagrad_accum=opt.adagrad_accumulator_init,
             decay_method=opt.decay_method,
             warmup_steps=opt.warmup_steps,

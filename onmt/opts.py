@@ -410,6 +410,7 @@ def train_opts(parser):
                        suggested a value of 0.98 for beta2, this parameter may
                        not work well for normal models / default
                        baselines.""")
+    group.add_argument('-adam_eps', type=float, default=1e-9)
     group.add_argument('-label_smoothing', type=float, default=0.0,
                        help="""Label smoothing value epsilon.
                        Probabilities of all non-true labels
