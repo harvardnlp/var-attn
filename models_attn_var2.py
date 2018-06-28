@@ -123,7 +123,7 @@ class AttnNetwork(nn.Module):
       q_attn_score = torch.matmul(self.q_proj(q_tgt), q_src.transpose(1,2)) # b x tgt x src      
       q_attn_log_prob = F.log_softmax(q_attn_score, 2)
       q_attn_prob = q_attn_log_prob.exp()      
-      q_attn_sample = torch.multinomial(q_attn_prob.view(b*tgt_l, src_l).detach())
+      q_attn_sample = torch.multinomial(q_attn_prob.view(b*tgt_l, src_l).detach(), 1)
       q_attn_log_prob_score = torch.gather(q_attn_log_prob.view(b*tgt_l, src_l), 1, q_attn_sample)
       q_attn_log_prob_score = q_attn_log_prob_score.view(b, tgt_l)
       q_attn_sample = q_attn_sample.view(b, tgt_l, 1).expand(b, tgt_l, self.h_dim*2).unsqueeze(2)
@@ -149,7 +149,7 @@ class AttnNetwork(nn.Module):
       p_attn_log_prob_i = F.log_softmax(p_attn_score_i, 2)
       p_attn_prob_i = p_attn_log_prob_i.exp() # b x 1 x src
       if self.mode ==  'vae_sample_prior':
-        q_attn_sample = torch.multinomial(p_attn_prob_i.view(b, src_l).detach())
+        q_attn_sample = torch.multinomial(p_attn_prob_i.view(b, src_l).detach(), 1)
         q_attn_log_prob_score = torch.gather(p_attn_log_prob_i.view(b, src_l), 1, q_attn_sample)
         q_attn_sample = q_attn_sample.unsqueeze(2).expand(b, 1, self.h_dim*2)
         prior_log_prob_score.append(q_attn_log_prob_score)

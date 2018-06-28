@@ -44,7 +44,6 @@ train_cat_sample_b6() {
         -accum_count 1 \
         -valid_batch_size 2 \
         -epochs 30 \
-        -inference_network_type brnn \
         -p_dist_type categorical \
         -q_dist_type categorical \
         -alpha_transformation sm \
@@ -76,7 +75,6 @@ train_cat_enum_b6() {
         -accum_count 1 \
         -valid_batch_size 2 \
         -epochs 30 \
-        -inference_network_type brnn \
         -p_dist_type categorical \
         -q_dist_type categorical \
         -alpha_transformation sm \
@@ -109,7 +107,6 @@ train_exact_b6() {
         -accum_count 1 \
         -valid_batch_size 2 \
         -epochs 30 \
-        -inference_network_type brnn \
         -p_dist_type categorical \
         -q_dist_type categorical \
         -alpha_transformation sm \
@@ -179,7 +176,7 @@ soft_dbg() {
     seed=131
     name=model_soft_b6
     gpuid=0
-    python -m pdb train.py \
+    DBG=1 python -m pdb train.py \
         -data $DATA \
         -save_model $name -gpuid $gpuid -seed $seed \
         -src_word_vec_size 4 \
@@ -216,7 +213,6 @@ train_soft_b8_dbg() {
         -learning_rate 3e-4 \
         -start_decay_at 2 \
         -global_attention mlp \
-        -dropout 0 \
         -report_every 1000 | tee $name.log
 }
 
@@ -225,9 +221,8 @@ yoon_soft() {
         python train_attn_var2.py \
         --gpu 0 \
         --checkpoint_path yoon-chp.pt \
-        --print_every 1000 \
         --attn soft \
-        --dropout 0
+        --print_every 1000 | tee yoon_soft_b8.log
 }
 
 train_soft_b32_dbg() {
@@ -249,7 +244,6 @@ train_soft_b32_dbg() {
         -learning_rate 3e-4 \
         -start_decay_at 2 \
         -global_attention mlp \
-        -dropout 0 \
         -report_every 500 | tee $name.log
 }
 
@@ -257,10 +251,38 @@ yoon_soft_b32() {
     PYTHONPATH=/n/rush_lab/users/yoonkim/seq2seq-py \
         python train_attn_var2.py \
         --train_file /n/rush_lab/users/yoonkim/seq2seq-py/data/bpe/iwslt-bpe-batch32-train.hdf5 \
-        --val_file /n/rush_lab/users/yoonkim/seq2seq-py/data/bpe/iwslt-bpe-batch32-val.hdf5 \
         --gpu 0 \
         --checkpoint_path yoon-chp-b32.pt \
         --print_every 500 \
-        --attn soft \
-        --dropout 0
+        --attn soft | tee yoon_soft_b32.log
+}
+
+vae_dbg() {
+    # The parameters for the soft model are slightly different
+    seed=131
+    name=model_cat_enum_b6
+    gpuid=0
+    DBG=1 python -m pdb train.py \
+        -data $DATA \
+        -save_model $name -gpuid $gpuid -seed $seed \
+        -encoder_type brnn \
+        -inference_network_rnn_size 8 \
+        -p_dist_type categorical \
+        -q_dist_type categorical \
+        -alpha_transformation sm \
+        -src_word_vec_size 4 \
+        -tgt_word_vec_size 4 \
+        -mode enum \
+        -inference_network_type bigbrnn \
+        -memory_size 8 \
+        -decoder_rnn_size 4 \
+        -attention_size 4 \
+        -encoder_type brnn -batch_size 6 \
+        -accum_count 1 -valid_batch_size 32 \
+        -epochs 30 -optim adam \
+        -learning_rate 3e-4 \
+        -start_decay_at 2 \
+        -global_attention mlp \
+        -dropout 0 \
+        -report_every 1000
 }

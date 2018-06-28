@@ -177,10 +177,10 @@ class ViRNNDecoder(InputFeedRNNDecoder):
         # input at every time step.
         for i, emb_t in enumerate(emb.split(1)):
             emb_t = emb_t.squeeze(0)
-            decoder_input = torch.cat([emb_t, input_feed], 1)
+            decoder_input = torch.cat([emb_t, input_feed], -1)
 
-            # decoder_input.unsqueeze(0)?
-            rnn_output, hidden = self.rnn(decoder_input, hidden)
+            rnn_output, hidden = self.rnn(decoder_input.unsqueeze(0), hidden)
+            rnn_output = rnn_output.squeeze(0)
             if q_scores is not None:
                 # map over tensor-like keys
                 q_scores_i = Params(
@@ -290,8 +290,9 @@ class ViRNNDecoder(InputFeedRNNDecoder):
             stacked_cell = onmt.modules.StackedLSTM
         else:
             stacked_cell = onmt.modules.StackedGRU
-        return stacked_cell(num_layers, input_size,
-                            hidden_size, dropout)
+        return nn.LSTM(
+            num_layers=num_layers, input_size=input_size,
+            hidden_size=hidden_size, dropout=dropout)
 
     @property
     def _input_size(self):
