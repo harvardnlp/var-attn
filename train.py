@@ -265,6 +265,7 @@ def train_model(model, fields, optim, data_type, model_opt):
         print('Validation xent: %g' % valid_stats.xent())
         print('Validation kl: %g' % valid_stats.kl())
         print('Validation accuracy: %g' % valid_stats.accuracy())
+        print("N validation words: {}".format(valid_stats._n_words))
         print("p(x)")
         model.use_prior = True
         valid_iter = make_dataset_iter(lazily_load_dataset("valid"),
@@ -276,6 +277,7 @@ def train_model(model, fields, optim, data_type, model_opt):
         print('Validation xent: %g' % valid_stats.xent())
         print('Validation kl: %g' % valid_stats.kl())
         print('Validation accuracy: %g' % valid_stats.accuracy())
+        print("N validation words: {}".format(valid_stats._n_words))
         return 0
 
 

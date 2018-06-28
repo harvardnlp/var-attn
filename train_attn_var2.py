@@ -279,7 +279,8 @@ def eval(data, model, print_result = True):
   max_prob1 = max_prob1 / num_words
   max_prob2 = max_prob2 / num_words
   min_prob1 = min_prob1 / num_words
-  min_prob2 = min_prob2 / num_words  
+  min_prob2 = min_prob2 / num_words
+  print("Num words: {}".format(num_words))
   if print_result:
     print('PPL: %.4f, ReconPPL: %.4f, KL: %.4f, Entropy: %.4f, AvgMax1: %.4f, AvgMax2: %.4f, AvgMin1: %.4f, AgvMin2: %.4f' %
           (ppl, recon_ppl, kl, entropy, max_prob1, max_prob2, min_prob1, min_prob2))

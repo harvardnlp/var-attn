@@ -263,6 +263,7 @@ def preprocess_opts(parser):
     group.add_argument('-tgt_seq_length_trunc', type=int, default=0,
                        help="Truncate target sequence length.")
     group.add_argument('-lower', action='store_true', help='lowercase data')
+    group.add_argument('-leave_valid', action='store_true', help='Leave validation data as is.')
 
     # Data processing options
     group = parser.add_argument_group('Random')

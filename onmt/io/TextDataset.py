@@ -72,16 +72,17 @@ class TextDataset(ONMTDatasetBase):
         # function in serialization too, which would cause a problem when
         # `torch.save()`. Thus we materialize it as a list.
         src_size = 0
-
+        tgt_size = 0
         out_examples = []
         for ex_values in example_values:
             example = self._construct_example_fromlist(
                 ex_values, out_fields)
             src_size += len(example.src)
             out_examples.append(example)
-
+            tgt_size += len(example.tgt)
         print("average src size", src_size / len(out_examples),
               len(out_examples))
+        print("Number of target tokens: {}".format(tgt_size))
 
         def filter_pred(example):
             return 0 < len(example.src) <= src_seq_length \

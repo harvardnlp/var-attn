@@ -96,7 +96,8 @@ def build_save_text_dataset_in_shards(src_corpus, tgt_corpus, fields,
             src_iter.num_feats, tgt_iter.num_feats,
             src_seq_length=opt.src_seq_length,
             tgt_seq_length=opt.tgt_seq_length,
-            dynamic_dict=opt.dynamic_dict)
+            dynamic_dict=opt.dynamic_dict,
+            use_filter_pred=corpus_type == "train" or not opt.leave_valid)
 
         # We save fields in vocab.pt seperately, so make it empty.
         dataset.fields = []
@@ -142,7 +143,8 @@ def build_save_dataset(corpus_type, fields, opt):
         sample_rate=opt.sample_rate,
         window_size=opt.window_size,
         window_stride=opt.window_stride,
-        window=opt.window)
+        window=opt.window,
+        use_filter_pred=corpus_type == "train" or not opt.leave_valid)
 
     # We save fields in vocab.pt seperately, so make it empty.
     dataset.fields = []
