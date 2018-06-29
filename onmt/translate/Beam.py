@@ -18,6 +18,7 @@ class Beam(object):
     """
     def __init__(self, size, pad, bos, eos,
                  n_best=1, cuda=False,
+                 eos_norm=0,
                  global_scorer=None,
                  min_length=0,
                  stepwise_penalty=False,
@@ -26,6 +27,9 @@ class Beam(object):
 
         self.size = size
         self.tt = torch.cuda if cuda else torch
+
+        # The eos norm.
+        self.eos_norm = eos_norm
 
         # The score for each translation on the beam.
         self.scores = self.tt.FloatTensor(size).zero_()
@@ -90,6 +94,10 @@ class Beam(object):
         if cur_len < self.min_length:
             for k in range(len(word_probs)):
                 word_probs[k][self._eos] = -1e20
+        else:
+            if self.eos_norm > 0:
+                for k in range(len(word_probs)):
+                    word_probs[k][self._eos] -= self.eos_norm * self.src_len / (cur_len + 1)
         # Sum the previous scores.
         if len(self.prev_ks) > 0:
             beam_scores = word_probs + \

@@ -539,6 +539,9 @@ def translate_opts(parser):
                         (higher = longer generation)""")
     group.add_argument('-beta', type=float, default=-0.,
                        help="""Coverage penalty parameter""")
+    group.add_argument('-eos_norm', type=float, default=0.,
+                       help="""Google NMT length penalty parameter
+                        (higher = longer generation)""")
     group.add_argument('-block_ngram_repeat', type=int, default=0,
                        help='Block repetition of ngrams during decoding.')
     group.add_argument('-ignore_when_blocking', nargs='+', type=str,

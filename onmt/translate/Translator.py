@@ -40,7 +40,8 @@ def make_translator(opt, report_score=True, out_file=None):
 
     translator = Translator(model, fields, global_scorer=scorer,
                             out_file=out_file, report_score=report_score,
-                            copy_attn=model_opt.copy_attn, **kwargs)
+                            copy_attn=model_opt.copy_attn,
+                            eos_norm=opt.eos_norm, **kwargs)
     return translator
 
 
@@ -70,6 +71,7 @@ class Translator(object):
                  n_best=1,
                  max_length=100,
                  global_scorer=None,
+                 eos_norm=0,
                  copy_attn=False,
                  gpu=False,
                  dump_beam="",
@@ -97,6 +99,7 @@ class Translator(object):
         self.n_best = n_best
         self.max_length = max_length
         self.global_scorer = global_scorer
+        self.eos_norm = eos_norm
         self.copy_attn = copy_attn
         self.beam_size = beam_size
         self.min_length = min_length
@@ -247,7 +250,8 @@ class Translator(object):
                                     min_length=self.min_length,
                                     stepwise_penalty=self.stepwise_penalty,
                                     block_ngram_repeat=self.block_ngram_repeat,
-                                    exclusion_tokens=exclusion_tokens)
+                                    exclusion_tokens=exclusion_tokens,
+                                    eos_norm=self.eos_norm)
                 for __ in range(batch_size)]
 
         # Help functions for working with beams and batches
@@ -266,7 +270,8 @@ class Translator(object):
         src_lengths = None
         if data_type == 'text':
             _, src_lengths = batch.src
-
+            for i in range(batch_size):
+                beam[i].src_len = src_lengths[i].item()
         enc_states, memory_bank = self.model.encoder(src, src_lengths)
         dec_states = self.model.decoder.init_decoder_state(
             src, memory_bank, enc_states)

@@ -50,6 +50,7 @@ train_cat_sample_b6() {
         -alpha_transformation sm \
         -global_attention mlp \
         -optim adam -learning_rate 3e-4 \
+        -adam_eps 1e-8 \
         -n_samples 1 \
         -start_decay_at 2 \
         -learning_rate_decay 0.5 \
@@ -81,6 +82,7 @@ train_cat_enum_b6() {
         -alpha_transformation sm \
         -global_attention mlp \
         -optim adam -learning_rate 3e-4 \
+        -adam_eps 1e-8 \
         -n_samples 1 \
         -start_decay_at 2 \
         -learning_rate_decay 0.5 \
@@ -113,6 +115,7 @@ train_exact_b6() {
         -alpha_transformation sm \
         -global_attention mlp \
         -optim adam -learning_rate 3e-4 \
+        -adam_eps 1e-8 \
         -n_samples 1 \
         -start_decay_at 2 \
         -learning_rate_decay 0.5 \
@@ -136,6 +139,7 @@ train_soft_b6() {
         -accum_count 1 -valid_batch_size 32 \
         -epochs 30 -optim adam \
         -learning_rate 3e-4 \
+        -adam_eps 1e-8 \
         -start_decay_at 2 \
         -global_attention mlp \
         -report_every 1000 | tee $name.log
@@ -165,13 +169,16 @@ gen_cat() {
     # VAE Sample
     model=/n/rush_lab/jc/onmt-attn/iwslt14-de-en/models/model_cat_sample_b6_dbg/model_cat_sample_b6_dbg_acc_73.44_ppl_3.94_e15.pt
     # Soft
-    model=model_soft_b6_dbg_adam_acc_63.42_ppl_7.26_e8.pt
-    #model=model_soft_b6_dbg_shuffle_acc_64.37_ppl_6.87_e9.pt
-        #-alpha 1 \
+    #model=model_soft_b6_dbg_adam_acc_63.42_ppl_7.26_e8.pt
+    model=model_soft_b6_dbg_shuffle_acc_64.37_ppl_6.87_e9.pt
+        #-stepwise_penalty \
     python -m pdb translate.py \
         -src data/iwslt14-de-en/test.de.bpe \
         -beam_size 10 \
         -batch_size 2 \
+        -length_penalty wu \
+        -alpha 1 \
+        -eos_norm 3 \
         -gpu 0 \
         -output $model.out \
         -model $model
@@ -227,28 +234,6 @@ train_soft_b6_dbg() {
         -report_every 1000 | tee $name.log
 }
 
-train_soft_b6_dbg_adam() {
-    # The parameters for the soft model are slightly different
-    seed=3435
-    name=model_soft_b6_dbg_adam
-    gpuid=0
-    python train.py \
-        -data $DATA \
-        -save_model $name -gpuid $gpuid -seed $seed \
-        -src_word_vec_size 512 \
-        -tgt_word_vec_size 512 \
-        -memory_size 1024 \
-        -decoder_rnn_size 768 \
-        -attention_size 512 \
-        -encoder_type brnn -batch_size 6 \
-        -accum_count 1 -valid_batch_size 32 \
-        -epochs 30 -optim adam \
-        -learning_rate 3e-4 \
-        -start_decay_at 2 \
-        -global_attention mlp \
-        -report_every 1000 | tee $name.log
-}
-
 yoon_soft() {
     PYTHONPATH=/n/rush_lab/users/yoonkim/seq2seq-py \
         stdbuf -o0 \
@@ -281,29 +266,6 @@ train_soft_b32_dbg() {
         -report_every 500 | tee $name.log
 }
 
-train_soft_b32_dbg_adam() {
-    # The parameters for the soft model are slightly different
-    seed=3435
-    name=model_soft_b32_dbg_adam
-    gpuid=0
-    python train.py \
-        -data $DATA \
-        -save_model $name -gpuid $gpuid -seed $seed \
-        -src_word_vec_size 512 \
-        -tgt_word_vec_size 512 \
-        -memory_size 1024 \
-        -decoder_rnn_size 768 \
-        -attention_size 512 \
-        -encoder_type brnn -batch_size 32 \
-        -accum_count 1 -valid_batch_size 32 \
-        -epochs 30 -optim adam \
-        -learning_rate 3e-4 \
-        -adam_eps 1e-6 \
-        -start_decay_at 2 \
-        -global_attention mlp \
-        -report_every 500 | tee $name.log
-}
-
 yoon_soft_b32() {
     PYTHONPATH=/n/rush_lab/users/yoonkim/seq2seq-py \
         stdbuf -o0 \
@@ -313,51 +275,6 @@ yoon_soft_b32() {
         --checkpoint_path yoon-chp-b32.pt \
         --print_every 500 \
         --attn soft | tee yoon_soft_b32.log
-}
-
-train_soft_b32_dbg_shuffle() {
-    # The parameters for the soft model are slightly different
-    seed=3435
-    name=model_soft_b32_dbg_shuffle
-    gpuid=0
-    python train.py \
-        -data $DATA \
-        -save_model $name -gpuid $gpuid -seed $seed \
-        -src_word_vec_size 512 \
-        -tgt_word_vec_size 512 \
-        -memory_size 1024 \
-        -decoder_rnn_size 768 \
-        -attention_size 512 \
-        -encoder_type brnn -batch_size 32 \
-        -accum_count 1 -valid_batch_size 32 \
-        -epochs 30 -optim adam \
-        -learning_rate 3e-4 \
-        -adam_eps 1e-8 \
-        -start_decay_at 2 \
-        -global_attention mlp \
-        -report_every 500 | tee $name.log
-}
-
-train_soft_b6_dbg_shuffle() {
-    seed=3435
-    name=model_soft_b6_dbg_shuffle
-    gpuid=0
-    python train.py \
-        -data $DATA \
-        -save_model $name -gpuid $gpuid -seed $seed \
-        -src_word_vec_size 512 \
-        -tgt_word_vec_size 512 \
-        -memory_size 1024 \
-        -decoder_rnn_size 768 \
-        -attention_size 512 \
-        -encoder_type brnn -batch_size 6 \
-        -accum_count 1 -valid_batch_size 32 \
-        -epochs 30 -optim adam \
-        -learning_rate 3e-4 \
-        -adam_eps 1e-8 \
-        -start_decay_at 2 \
-        -global_attention mlp \
-        -report_every 1000 | tee $name.log
 }
 
 train_soft_b32_dbg_dropout() {
