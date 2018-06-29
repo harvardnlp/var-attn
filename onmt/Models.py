@@ -113,6 +113,7 @@ class RNNEncoder(EncoderBase):
                  use_bridge=False):
         super(RNNEncoder, self).__init__()
         assert embeddings is not None
+        self.dropout = nn.Dropout(dropout)
 
         num_directions = 2 if bidirectional else 1
         assert hidden_size % num_directions == 0
@@ -139,7 +140,7 @@ class RNNEncoder(EncoderBase):
         "See :obj:`EncoderBase.forward()`"
         self._check_args(src, lengths, encoder_state)
 
-        emb = self.embeddings(src)
+        emb = self.dropout(self.embeddings(src))
         s_len, batch, emb_dim = emb.size()
         self.emb_h = emb
         packed_emb = emb
@@ -403,7 +404,7 @@ class StdRNNDecoder(RNNDecoderBase):
 
         # Initialize local and return variables.
         attns = {}
-        emb = self.embeddings(tgt)
+        emb = self.dropout(self.embeddings(tgt))
 
         # Run the forward pass of the RNN.
         if isinstance(self.rnn, nn.GRU):
@@ -498,7 +499,7 @@ class InputFeedRNNDecoder(RNNDecoderBase):
         if self._coverage:
             attns["coverage"] = []
 
-        emb = self.embeddings(tgt)
+        emb = self.dropout(self.embeddings(tgt))
         assert emb.dim() == 3  # len x batch x embedding_dim
 
         hidden = state.hidden
