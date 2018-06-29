@@ -211,8 +211,11 @@ def make_dataset_iter(datasets, fields, opt, is_train=True):
 
     device = opt.gpuid[0] if opt.gpuid else -1
 
-    return DatasetLazyIter(datasets, fields, batch_size, batch_size_fn,
+    #return DatasetLazyIter(datasets, fields, batch_size, batch_size_fn,
+                           #device, is_train)
+    lol = DatasetLazyIter(datasets, fields, batch_size, batch_size_fn,
                            device, is_train)
+    return lol
 
 
 def make_loss_compute(model, tgt_vocab, opt, train=True):
@@ -285,13 +288,25 @@ def train_model(model, fields, optim, data_type, model_opt):
     print(' * number of epochs: %d, starting from Epoch %d' %
           (opt.epochs + 1 - opt.start_epoch, opt.start_epoch))
     print(' * batch size: %d' % opt.batch_size)
-
+    train_dataset = next(lazily_load_dataset("train"))
+    train_dataset.fields = fields
+    device = opt.gpuid[0] if opt.gpuid else -1
+    train_iter = onmt.io.OrderedIterator(
+        dataset=train_dataset, batch_size=opt.batch_size,
+        batch_size_fn=None,
+        device=device, train=True,
+        sort=False, sort_within_batch=True,
+        repeat=False)
+    train_iter.get_cur_dataset = lambda: train_dataset
+    #batch = next(iter(train_iter))
+    #batch2 = next(iter(train_iter))
+    #import pdb; pdb.set_trace()
     for epoch in range(opt.start_epoch, opt.epochs + 1):
         print('')
 
         # 1. Train for one epoch on the training set.
-        train_iter = make_dataset_iter(lazily_load_dataset("train"),
-                                       fields, opt)
+        #train_iter = make_dataset_iter(lazily_load_dataset("train"),
+                                       #fields, opt)
         train_stats = trainer.train(train_iter, epoch, report_func)
         print('Train exp(elbo): %g' % train_stats.expelbo())
         print('Train perplexity: %g' % train_stats.ppl())

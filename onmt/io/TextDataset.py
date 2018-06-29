@@ -79,10 +79,10 @@ class TextDataset(ONMTDatasetBase):
                 ex_values, out_fields)
             src_size += len(example.src)
             out_examples.append(example)
-            tgt_size += len(example.tgt)
+            #tgt_size += len(example.tgt)
         print("average src size", src_size / len(out_examples),
               len(out_examples))
-        print("Number of target tokens: {}".format(tgt_size))
+        #print("Number of target tokens: {}".format(tgt_size))
 
         def filter_pred(example):
             return 0 < len(example.src) <= src_seq_length \

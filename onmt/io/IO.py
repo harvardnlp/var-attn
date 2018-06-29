@@ -3,6 +3,7 @@
 import os
 from collections import Counter, defaultdict, OrderedDict
 from itertools import count
+import random
 
 import torch
 import torchtext.data
