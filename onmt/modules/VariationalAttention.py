@@ -40,7 +40,7 @@ class VariationalAttention(nn.Module):
             self.linear_in = nn.Linear(tgt_dim, src_dim, bias=False)
         elif self.attn_type == "mlp":
             self.linear_context = nn.Linear(src_dim, dim, bias=False)
-            self.linear_query = nn.Linear(tgt_dim, dim, bias=True)
+            self.linear_query = nn.Linear(tgt_dim, dim, bias=False)
             self.v = nn.Linear(dim, 1, bias=False)
         # mlp wants it with bias
         out_bias = self.attn_type == "mlp"
@@ -154,7 +154,6 @@ class VariationalAttention(nn.Module):
         aeq(batch, batch_)
 
         # compute attention scores, as in Luong et al.
-        assert (self.p_dist_type == 'categorical')
         # Params should be T x N x S
         if self.p_dist_type == "categorical":
             scores = self.score(input, memory_bank)
@@ -250,7 +249,6 @@ class VariationalAttention(nn.Module):
             aeq(sourceL, sourceL_)
         else:
             # Only support input feeding.
-            assert (False)
             # T x N x H
             h_c = h_c.transpose(0, 1).contiguous()
             # T x N x S

@@ -63,11 +63,11 @@ class InferenceNetwork(nn.Module):
             self.W = torch.nn.Linear(rnn_size, rnn_size, bias=False)
         self.rnn_size = rnn_size
 
-    def forward(self, src, tgt, src_lengths=None):
-        src_final, src_memory_bank = self.src_encoder(src, src_lengths)
+    def forward(self, src, tgt, src_lengths=None, src_emb=None, tgt_emb=None):
+        src_final, src_memory_bank = self.src_encoder(src, src_lengths, emb=src_emb)
         src_length, batch_size, rnn_size = src_memory_bank.size()
 
-        tgt_final, tgt_memory_bank = self.tgt_encoder(tgt)
+        tgt_final, tgt_memory_bank = self.tgt_encoder(tgt, emb=tgt_emb)
 
         src_memory_bank = src_memory_bank.transpose(0,1) # batch_size, src_length, rnn_size
         src_memory_bank = src_memory_bank.contiguous().view(-1, rnn_size) # batch_size*src_length, rnn_size
@@ -378,22 +378,26 @@ class ViNMTModel(nn.Module):
                  * final decoder state
         """
 
+        src_emb = self.encoder.embeddings(src)
+        tgt_emb = self.decoder.embeddings(tgt)
         if self.dbg:
             # only see past
             inftgt = tgt[:-1]
         else:
             # see present
             inftgt = tgt[1:]
+            inftgt_emb = tgt_emb[1:]
         tgt = tgt[:-1]  # exclude last target from inputs
+        tgt_emb = tgt_emb[:-1]  # exclude last target from inputs
         tgt_length, batch_size, rnn_size = tgt.size()
 
-        enc_final, memory_bank = self.encoder(src, lengths)
+        enc_final, memory_bank = self.encoder(src, lengths, emb=src_emb)
         enc_state = self.decoder.init_decoder_state(
             src, memory_bank, enc_final)
 
         if self.inference_network is not None and not self.use_prior:
             # inference network q(z|x,y)
-            q_scores = self.inference_network(src, inftgt, lengths) # batch_size, tgt_length, src_length
+            q_scores = self.inference_network(src, inftgt, lengths, src_emb=src_emb, tgt_emb=inftgt_emb) # batch_size, tgt_length, src_length
         else:
             q_scores = None
         decoder_outputs, dec_state, attns, dist_info, decoder_outputs_baseline = \

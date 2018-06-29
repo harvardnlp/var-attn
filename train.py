@@ -318,7 +318,11 @@ def train_model(model, fields, optim, data_type, model_opt):
         valid_iter = make_dataset_iter(lazily_load_dataset("valid"),
                                        fields, opt,
                                        is_train=False)
-        valid_stats = trainer.validate(valid_iter, model.mode)
+        if model.mode == 'sample':
+            val_mode = 'enum'
+        else:
+            val_mode = model.mode
+        valid_stats = trainer.validate(valid_iter, val_mode)
         print('Validation exp(elbo): %g' % valid_stats.expelbo())
         print('Validation perplexity: %g' % valid_stats.ppl())
         print('Validation xent: %g' % valid_stats.xent())
