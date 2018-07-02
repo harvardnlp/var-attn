@@ -593,17 +593,6 @@ def main():
         )
         copy_module(model.encoder.rnn,
                     dbg_model.enc_rnn)
-        copy_module(model.decoder.attn.linear_out,
-                    dbg_model.context_proj[0])
-        copy_module(model.generator.proj,
-                    dbg_model.vocab_proj)
-
-        copy_module(model.decoder.attn.linear_context,
-                    dbg_model.attn_proj)
-        copy_module(model.decoder.attn.linear_query,
-                    dbg_model.attn_proj2)
-        copy_module(model.decoder.attn.v,
-                    dbg_model.attn_proj3)
 
         model.decoder.embeddings.make_embedding.emb_luts[0].weight.data.copy_(
             dbg_model.dec_emb.weight
@@ -612,8 +601,30 @@ def main():
             model.decoder.rnn,
             dbg_model.dec_rnn
         )
+
+        copy_module(model.decoder.attn.linear_out,
+                    dbg_model.context_proj[0])
+        copy_module(model.decoder.attn.linear_context,
+                    dbg_model.attn_proj)
+        copy_module(model.decoder.attn.linear_query,
+                    dbg_model.attn_proj2)
+        copy_module(model.decoder.attn.v,
+                    dbg_model.attn_proj3)
+        copy_module(model.generator.proj,
+                    dbg_model.vocab_proj)
         # Inf Net
-        #import pdb; pdb.set_trace()
+        copy_module(
+            model.inference_network.src_encoder.rnn,
+            dbg_model.q_src
+        )
+        copy_module(
+            model.inference_network.tgt_encoder.rnn,
+            dbg_model.q_tgt
+        )
+        copy_module(
+            model.inference_network.W,
+            dbg_model.q_proj
+        )
 
         src = torch.cuda.LongTensor(5,2,1).fill_(10)
         tgt = torch.cuda.LongTensor(5,2,1).fill_(10)
@@ -635,15 +646,17 @@ def main():
         log_prob2 = model.generator(context[0]).gather(-1, tgt[1:]).squeeze(-1)
         nll2 = F.nll_loss(out2.view(-1, 8876), tgt[1:].view(-1), size_average=False) / 2
         nll2.backward()
-        """
-        print("src_emb_h diff: {}".format((model.src_emb_h - dbg_model.src_emb_h.transpose(0,1)).abs().max()))
-        print("enc_h diff: {}".format((model.enc_h - dbg_model.enc_h.transpose(0,1)).abs().max()))
-        print("attn diff: {}".format((model.decoder.p_attn_score[0] - dbg_model.p_attn_score[0].squeeze(1)).abs().max()))
-        print("src_context diff: {}".format((model.decoder.src_context[0] - dbg_model.src_context[0].squeeze(1)).abs().max()))
-        print("dec_h diff: {}".format((model.decoder.dec_h[0] - dbg_model.dec_h[0].squeeze(1)).abs().max()))
-        print("decout diff: {}".format((model.decoder.context[0] - dbg_model.context[0].squeeze(1)).abs().max()))
-        print("vocab_score diff: {}".format((model.generator.vocab_score[0] - dbg_model.vocab_score[0].squeeze(1)).abs().max()))
-        """
+
+        print("src_emb_h diff: {}".format((model.encoder.emb_h - dbg_model.src_emb_h.transpose(0,1)).abs().max()))
+        print("enc_h diff: {}".format((model.encoder.enc_h - dbg_model.enc_h.transpose(0,1)).abs().max()))
+        print("q_src_h diff: {}".format((model.inference_network.q_src_h - dbg_model.q_src_h.transpose(0,1)).abs().max()))
+        print("q_tgt_h diff: {}".format((model.inference_network.q_tgt_h - dbg_model.q_tgt_h.transpose(0,1)).abs().max()))
+        print("attn diff: {}".format((context[1]["std"]- dbg_model.attn_prob.transpose(0,1)).abs().max()))
+        print("q_attn diff: {}".format((context[1]["q"]- dbg_model.q_attn_prob.transpose(0,1)).abs().max()))
+        #print("src_context diff: {}".format((model.decoder.src_context[0] - dbg_model.src_context[0].squeeze(1)).abs().max()))
+        #print("dec_h diff: {}".format((model.decoder.dec_h[0] - dbg_model.dec_h[0].squeeze(1)).abs().max()))
+        #print("decout diff: {}".format((model.decoder.context[0] - dbg_model.context[0].squeeze(1)).abs().max()))
+        #print("vocab_score diff: {}".format((model.generator.vocab_score[0] - dbg_model.vocab_score[0].squeeze(1)).abs().max()))
         print("log_prob diff: {}".format(log_prob2 - dbg_model.log_prob.t()))
 
         print("vocab_proj grad diff: {}".format((model.generator.proj.weight.grad - dbg_model.vocab_proj.weight.grad).abs().max()))
@@ -656,6 +669,7 @@ def main():
 
         print("src_emb grad diff: {}".format((model.encoder.embeddings.make_embedding.emb_luts[0].weight.grad - dbg_model.enc_emb.weight.grad).abs().max()))
         print("tgt_emb grad diff: {}".format((model.decoder.embeddings.make_embedding.emb_luts[0].weight.grad - dbg_model.dec_emb.weight.grad).abs().max()))
+        import pdb; pdb.set_trace()
     # END DBG
 
     # Build optimizer.

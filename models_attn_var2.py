@@ -118,8 +118,10 @@ class AttnNetwork(nn.Module):
     p_attn_score = self.attn_proj(enc_h) # b x src x h
 
     if self.mode == 'vae' or self.mode == 'vae_sample':
-      q_src, _ = self.q_src(src_emb) 
+      q_src, _ = self.q_src(src_emb)
+      self.q_src_h = q_src
       q_tgt, _ = self.q_tgt(tgt_emb[:, 1:])
+      self.q_tgt_h = q_tgt
       q_attn_score = torch.matmul(self.q_proj(q_tgt), q_src.transpose(1,2)) # b x tgt x src      
       q_attn_log_prob = F.log_softmax(q_attn_score, 2)
       q_attn_prob = q_attn_log_prob.exp()      

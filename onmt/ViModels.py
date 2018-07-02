@@ -68,13 +68,15 @@ class InferenceNetwork(nn.Module):
         src_length, batch_size, rnn_size = src_memory_bank.size()
 
         tgt_final, tgt_memory_bank = self.tgt_encoder(tgt, emb=tgt_emb)
+        self.q_src_h = src_memory_bank
+        self.q_tgt_h = tgt_memory_bank
 
         src_memory_bank = src_memory_bank.transpose(0,1) # batch_size, src_length, rnn_size
-        src_memory_bank = src_memory_bank.contiguous().view(-1, rnn_size) # batch_size*src_length, rnn_size
-        src_memory_bank = self.W(src_memory_bank) \
-                              .view(batch_size, src_length, rnn_size)
+        #src_memory_bank = src_memory_bank.contiguous().view(-1, rnn_size) # batch_size*src_length, rnn_size
+        #src_memory_bank = self.W(src_memory_bank) \
+                              #.view(batch_size, src_length, rnn_size)
         src_memory_bank = src_memory_bank.transpose(1,2) # batch_size, rnn_size, src_length
-        tgt_memory_bank = tgt_memory_bank.transpose(0,1) # batch_size, tgt_length, rnn_size
+        tgt_memory_bank = self.W(tgt_memory_bank.transpose(0,1)) # batch_size, tgt_length, rnn_size
 
         if self.dist_type == "categorical":
             scores = torch.bmm(tgt_memory_bank, src_memory_bank)
@@ -139,7 +141,7 @@ class ViRNNDecoder(InputFeedRNNDecoder):
         )
 
     def _run_forward_pass(self, tgt, memory_bank, state, memory_lengths=None,
-                          q_scores=None):
+                          q_scores=None, tgt_emb=None):
         """
         See StdRNNDecoder._run_forward_pass() for description
         of arguments and return values.
@@ -163,7 +165,7 @@ class ViRNNDecoder(InputFeedRNNDecoder):
         if self._coverage:
             attns["coverage"] = []
 
-        emb = self.embeddings(tgt)
+        emb = self.dropout(self.embeddings(tgt)) if tgt_emb is None else tgt_emb
         assert emb.dim() == 3  # len x batch x embedding_dim
 
         tgt_len, batch_size =  emb.size(0), emb.size(1)
@@ -253,7 +255,7 @@ class ViRNNDecoder(InputFeedRNNDecoder):
 
         return hidden, decoder_outputs, input_feed, attns, dist_info, decoder_outputs_baseline
 
-    def forward(self, tgt, memory_bank, state, memory_lengths=None, q_scores=None):
+    def forward(self, tgt, memory_bank, state, memory_lengths=None, q_scores=None, tgt_emb=None):
         # Check
         assert isinstance(state, RNNDecoderState)
         tgt_len, tgt_batch, _ = tgt.size()
@@ -264,7 +266,7 @@ class ViRNNDecoder(InputFeedRNNDecoder):
         # Run the forward pass of the RNN.
         decoder_final, decoder_outputs, input_feed, attns, dist_info, decoder_outputs_baseline = self._run_forward_pass(
             tgt, memory_bank, state, memory_lengths=memory_lengths,
-            q_scores=q_scores)
+            q_scores=q_scores, tgt_emb=tgt_emb)
 
         # Update the state with the result.
         final_output = decoder_outputs[-1]
@@ -378,8 +380,8 @@ class ViNMTModel(nn.Module):
                  * final decoder state
         """
 
-        src_emb = self.encoder.embeddings(src)
-        tgt_emb = self.decoder.embeddings(tgt)
+        src_emb = self.encoder.dropout(self.encoder.embeddings(src))
+        tgt_emb = self.decoder.dropout(self.decoder.embeddings(tgt))
         if self.dbg:
             # only see past
             inftgt = tgt[:-1]
@@ -394,10 +396,12 @@ class ViNMTModel(nn.Module):
         enc_final, memory_bank = self.encoder(src, lengths, emb=src_emb)
         enc_state = self.decoder.init_decoder_state(
             src, memory_bank, enc_final)
+        # enc_state.* should all be 0
 
         if self.inference_network is not None and not self.use_prior:
             # inference network q(z|x,y)
-            q_scores = self.inference_network(src, inftgt, lengths, src_emb=src_emb, tgt_emb=inftgt_emb) # batch_size, tgt_length, src_length
+            q_scores = self.inference_network(
+                src, inftgt, lengths, src_emb=src_emb, tgt_emb=inftgt_emb) # batch_size, tgt_length, src_length
         else:
             q_scores = None
         decoder_outputs, dec_state, attns, dist_info, decoder_outputs_baseline = \
@@ -405,7 +409,8 @@ class ViNMTModel(nn.Module):
                          enc_state if dec_state is None
                          else dec_state,
                          memory_lengths=lengths,
-                         q_scores=q_scores)
+                         q_scores=q_scores,
+                         tgt_emb=tgt_emb)
 
         if self.multigpu:
             # Not yet supported on multi-gpu

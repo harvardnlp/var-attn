@@ -154,6 +154,7 @@ class RNNEncoder(EncoderBase):
 
         if lengths is not None and not self.no_pack_padded_seq:
             memory_bank = unpack(memory_bank)[0]
+        self.enc_h = memory_bank
 
         if self.use_bridge:
             encoder_final = self._bridge(encoder_final)
@@ -618,8 +619,6 @@ class NMTModel(nn.Module):
         tgt = tgt[:-1]  # exclude last target from inputs
 
         enc_final, memory_bank = self.encoder(src, lengths)
-        self.src_emb_h = self.encoder.emb_h
-        self.enc_h = memory_bank
         enc_state = \
             self.decoder.init_decoder_state(src, memory_bank, enc_final)
 
@@ -736,7 +735,6 @@ class Generator(nn.Module):
         # log_pa: T x N x S=K
         scores = F.log_softmax(self.proj(input), dim=-1)
         if input.dim() == 3:
-            self.vocab_score = self.proj(input)
             # Short-circuit
             return scores
         if scores.size(1) == 1:

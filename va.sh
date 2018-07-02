@@ -57,18 +57,18 @@ train_cat_sample_b6() {
         -report_every 1000 | tee $name.log
 }
 
-train_cat_sample_b8() {
+train_cat_sample_b32() {
     gpuid=0
-    seed=131
-    name=model_cat_sample_b8
+    seed=3435
+    name=model_cat_sample_b32
     python train.py \
         -data $DATA \
         -save_model $name -gpuid $gpuid -seed $seed \
         -mode sample \
-        -batch_size 8 \
+        -batch_size 32 \
         -encoder_type brnn \
+        -inference_network_type bigbrnn \
         -inference_network_rnn_size 512 \
-        -bridge \
         -src_word_vec_size 512 \
         -tgt_word_vec_size 512 \
         -memory_size 1024 \
@@ -77,51 +77,21 @@ train_cat_sample_b8() {
         -accum_count 1 \
         -valid_batch_size 2 \
         -epochs 30 \
-        -inference_network_type bigbrnn \
         -p_dist_type categorical \
         -q_dist_type categorical \
         -alpha_transformation sm \
         -global_attention mlp \
         -optim adam -learning_rate 3e-4 \
+        -adam_eps 1e-8 \
         -n_samples 1 \
         -start_decay_at 2 \
         -learning_rate_decay 0.5 \
-        -report_every 1000 | tee $name.log
+        -report_every 500 | tee $name.log
 }
-train_cat_sample_b8_512() {
-    gpuid=0
-    seed=131
-    name=model_cat_sample_b8
-    python train.py \
-        -data $DATA \
-        -save_model $name -gpuid $gpuid -seed $seed \
-        -mode sample \
-        -batch_size 8 \
-        -encoder_type brnn \
-        -inference_network_rnn_size 512 \
-        -bridge \
-        -src_word_vec_size 512 \
-        -tgt_word_vec_size 512 \
-        -memory_size 1024 \
-        -decoder_rnn_size 768 \
-        -attention_size 512 \
-        -accum_count 1 \
-        -valid_batch_size 2 \
-        -epochs 30 \
-        -inference_network_type bigbrnn \
-        -p_dist_type categorical \
-        -q_dist_type categorical \
-        -alpha_transformation sm \
-        -global_attention mlp \
-        -optim adam -learning_rate 3e-4 \
-        -n_samples 1 \
-        -start_decay_at 2 \
-        -learning_rate_decay 0.5 \
-        -report_every 1000 | tee $name.log
-}
+
 train_cat_enum_b6() {
     gpuid=0
-    seed=131
+    seed=3435
     name=model_cat_enum_b6
     python train.py \
         -data $DATA \
@@ -153,7 +123,7 @@ train_cat_enum_b6() {
 
 train_exact_b6() {
     gpuid=0
-    seed=131
+    seed=3435
     name=model_exact_b6
     python train.py \
         -data $DATA \
@@ -209,11 +179,14 @@ train_soft_b6() {
 
 eval_cat() {
     model=$1
-    #model=model_soft_b6_dbg_acc_63.16_ppl_7.29_e8.pt
-    model=model_soft_b32_dbg_acc_62.18_ppl_7.68_e9.pt
-    model=model_soft_b32_dbg_adam_acc_62.26_ppl_7.62_e9.pt
-    model=model_soft_b32_dbg_shuffle_acc_63.00_ppl_7.38_e10.pt
-    model=model_soft_b6_dbg_shuffle_acc_64.37_ppl_6.87_e9.pt
+    # Soft
+    model=model_soft_b6_dbg_dropout_acc_64.89_ppl_6.59_e11.pt
+    # Exact
+    #model=model_exact_b6_acc_65.18_ppl_5.82_e11.pt
+    # VAE Enum
+    #model=model_cat_enum_b6_acc_75.20_ppl_6.23_e10.pt
+    # VAE Sample
+    #model=model_cat_sample_b6_acc_74.52_ppl_6.53_e12.pt
     python train.py \
         -data $DATATEST \
         -eval_with $model \
@@ -226,15 +199,15 @@ eval_cat() {
 }
 
 gen_cat() {
-    # VAE Enum
-    model=/n/rush_lab/jc/onmt-attn/iwslt14-de-en/models/model_cat_enum_b6_dbg/model_cat_enum_b6_dbg_acc_74.47_ppl_3.82_e7.pt
-    # VAE Sample
-    model=/n/rush_lab/jc/onmt-attn/iwslt14-de-en/models/model_cat_sample_b6_dbg/model_cat_sample_b6_dbg_acc_73.44_ppl_3.94_e15.pt
     # Soft
-    #model=model_soft_b6_dbg_adam_acc_63.42_ppl_7.26_e8.pt
-    model=model_soft_b6_dbg_shuffle_acc_64.37_ppl_6.87_e9.pt
-        #-stepwise_penalty \
-    python -m pdb translate.py \
+    model=model_soft_b6_dbg_dropout_acc_64.89_ppl_6.59_e11.pt
+    # Exact
+    model=model_exact_b6_acc_65.18_ppl_5.82_e11.pt
+    # VAE Enum
+    model=model_cat_enum_b6_acc_75.20_ppl_6.23_e10.pt
+    # VAE Sample
+    model=model_cat_sample_b6_acc_74.52_ppl_6.53_e12.pt
+    python translate.py \
         -src data/iwslt14-de-en/test.de.bpe \
         -beam_size 10 \
         -batch_size 2 \
@@ -296,16 +269,6 @@ train_soft_b6_dbg() {
         -report_every 1000 | tee $name.log
 }
 
-yoon_soft() {
-    PYTHONPATH=/n/rush_lab/users/yoonkim/seq2seq-py \
-        stdbuf -o0 \
-        python train_attn_var2.py \
-        --gpu 0 \
-        --checkpoint_path yoon-chp.pt \
-        --attn soft \
-        --print_every 1000 | tee yoon_soft_b6.log
-}
-
 train_soft_b32_dbg() {
     # The parameters for the soft model are slightly different
     seed=3435
@@ -326,6 +289,16 @@ train_soft_b32_dbg() {
         -start_decay_at 2 \
         -global_attention mlp \
         -report_every 500 | tee $name.log
+}
+
+yoon_soft() {
+    PYTHONPATH=/n/rush_lab/users/yoonkim/seq2seq-py \
+        stdbuf -o0 \
+        python train_attn_var2.py \
+        --gpu 0 \
+        --checkpoint_path yoon-chp.pt \
+        --attn soft \
+        --print_every 1000 | tee yoon_soft_b6.log
 }
 
 yoon_soft_b32() {
@@ -393,7 +366,7 @@ vae_dbg() {
         -data $DATA \
         -save_model $name -gpuid $gpuid -seed $seed \
         -encoder_type brnn \
-        -inference_network_rnn_size 8 \
+        -inference_network_rnn_size 4 \
         -p_dist_type categorical \
         -q_dist_type categorical \
         -alpha_transformation sm \
@@ -411,7 +384,49 @@ vae_dbg() {
         -start_decay_at 2 \
         -global_attention mlp \
         -dropout 0 \
+        -inference_network_dropout 0 \
         -report_every 1000
+}
+
+yoon_exact() {
+    PYTHONPATH=/n/rush_lab/users/yoonkim/seq2seq-py \
+        stdbuf -o0 \
+        python train_attn_var2.py \
+        --gpu 0 \
+        --checkpoint_path yoon-chp-exact.pt \
+        --attn hard \
+        --print_every 1000 | tee yoon_exact_b6.log
+}
+
+yoon_vae() {
+    PYTHONPATH=/n/rush_lab/users/yoonkim/seq2seq-py \
+        stdbuf -o0 \
+        python train_attn_var2.py \
+        --gpu 0 \
+        --checkpoint_path yoon-chp-vae.pt \
+        --attn vae \
+        --print_every 1000 | tee yoon_vae_b6.log
+}
+
+yoon_vaesample() {
+    PYTHONPATH=/n/rush_lab/users/yoonkim/seq2seq-py \
+        stdbuf -o0 \
+        python train_attn_var2.py \
+        --gpu 0 \
+        --checkpoint_path yoon-chp-vae-sample.pt \
+        --attn vae_sample \
+        --print_every 1000 | tee yoon_vae_sample_b6.log
+}
+
+yoon_sample_b32() {
+    PYTHONPATH=/n/rush_lab/users/yoonkim/seq2seq-py \
+        stdbuf -o0 \
+        python train_attn_var2.py \
+        --train_file /n/rush_lab/users/yoonkim/seq2seq-py/data/bpe/iwslt-bpe-batch32-train.hdf5 \
+        --gpu 0 \
+        --checkpoint_path yoon-chp-vae-sample-b32.pt \
+        --print_every 500 \
+        --attn vae_sample | tee yoon_vae_sample_b32.log
 }
 
 eval_yoon() {
