@@ -48,3 +48,10 @@ the following command with `$model` replaced with a saved checkpoint.
 source va.sh && CUDA_VISIBLE_DEVICES=0 eval_cat $model
 ```
 
+The model can also be used to generate translations of the test data:
+
+```bash
+source va.sh && CUDA_VISIBLE_DEVICES=0 gen_cat $model
+sed -e "s/@@ //g" $model.out | perl tools/multi-bleu.perl data/iwslt14-de-en/test.en
+```
+

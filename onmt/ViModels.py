@@ -72,9 +72,6 @@ class InferenceNetwork(nn.Module):
         self.q_tgt_h = tgt_memory_bank
 
         src_memory_bank = src_memory_bank.transpose(0,1) # batch_size, src_length, rnn_size
-        #src_memory_bank = src_memory_bank.contiguous().view(-1, rnn_size) # batch_size*src_length, rnn_size
-        #src_memory_bank = self.W(src_memory_bank) \
-                              #.view(batch_size, src_length, rnn_size)
         src_memory_bank = src_memory_bank.transpose(1,2) # batch_size, rnn_size, src_length
         tgt_memory_bank = self.W(tgt_memory_bank.transpose(0,1)) # batch_size, tgt_length, rnn_size
 
