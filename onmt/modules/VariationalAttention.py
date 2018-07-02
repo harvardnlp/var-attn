@@ -176,7 +176,6 @@ class VariationalAttention(nn.Module):
         # each context vector c_t is the weighted average
         # over all the source hidden states
         context_c = torch.bmm(c_align_vectors, memory_bank)
-        #concat_c = torch.cat([context_c, input], -1)
         concat_c = torch.cat([input, context_c], -1)
         # N x T x H
         h_c = self.tanh(self.linear_out(concat_c))
@@ -211,7 +210,6 @@ class VariationalAttention(nn.Module):
                 .repeat(targetL, 1, 1, 1) # T, N, S, H
                 .permute(2, 1, 0, 3)) # S, N, T, H
         input = input.unsqueeze(0).repeat(context_y.size(0), 1, 1, 1)
-        #concat_y = torch.cat([context_y, input], -1)
         concat_y = torch.cat([input, context_y], -1)
         # K x N x T x H
         h_y = self.tanh(self.linear_out(concat_y))

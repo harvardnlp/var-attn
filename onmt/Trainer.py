@@ -237,9 +237,7 @@ class Trainer(object):
             mode = old_mode
         self.model.mode = mode
         self.valid_loss.generator.mode = mode
-        # lol...self.valid_loss.generator and self.train_loss.generator are references
-        #import pdb; pdb.set_trace()
-        # We want to always evaluate hard enum
+        # self.valid_loss.generator and self.train_loss.generator are references
 
         stats = Statistics()
 
@@ -307,7 +305,6 @@ class Trainer(object):
         torch.save(checkpoint,
                    '%s_acc_%.2f_ppl_%.2f_e%d.pt'
                    % (opt.save_model, valid_stats.accuracy(),
-                      #valid_stats.ppl(), epoch))
                       valid_stats.expelbo(), epoch))
 
     def _gradient_accumulation(self, true_batchs, total_stats,
@@ -361,7 +358,6 @@ class Trainer(object):
                     print([x[0] for x in nans])
                     for _, param in nans:
                         param.grad[param.grad!=param.grad] = 0
-                    #import pdb; pdb.set_trace()
 
                 # 4. Update the parameters and statistics.
                 if self.grad_accum_count == 1:
