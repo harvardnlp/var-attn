@@ -204,3 +204,42 @@ gen_cat() {
         -model $model
 }
 
+# Transformer
+# Shadow variables
+TEXT=data/wmt14-de-en
+DATA=data/wmt/wmt_125
+DATATEST=data/wmt/wmt_125_test
+
+preprocess_bpe_wmt(){
+    # Preprocesses the data in data/iwslt14-de-en
+    # Since we are using BPE, we do not force any unks.
+    mkdir -p data/wmt
+    python preprocess.py \
+        -train_src ${TEXT}/train.de.bpe -train_tgt ${TEXT}/train.en.bpe \
+        -valid_src ${TEXT}/valid.de.bpe -valid_tgt ${TEXT}/valid.en.bpe \
+        -src_vocab_size 80000 -tgt_vocab_size 80000 \
+        -src_words_min_frequency 0 -tgt_words_min_frequency 0 \
+        -src_seq_length 125 -tgt_seq_length 125 \
+        -save_data $DATA
+
+    # Get the test data for evaluation
+    python preprocess.py \
+        -train_src ${TEXT}/train.de.bpe -train_tgt ${TEXT}/train.en.bpe \
+        -valid_src ${TEXT}/test.de.bpe -valid_tgt ${TEXT}/test.en.bpe \
+        -src_vocab_size 80000 -tgt_vocab_size 80000 \
+        -src_words_min_frequency 0 -tgt_words_min_frequency 0 \
+        -src_seq_length 125 -tgt_seq_length 125 \
+        -leave_valid \
+        -save_data $DATATEST
+}
+
+train_soft_trans() {
+    python  train.py -data /tmp/de2/data -save_model /tmp/extra -gpuid 1 \
+        -layers 6 -rnn_size 512 -word_vec_size 512   \
+        -encoder_type transformer -decoder_type transformer -position_encoding \
+        -train_steps 100000  -max_generator_batches 32 -dropout 0.1 \
+        -batch_size 4096 -batch_type tokens -normalization tokens  -accum_count 4 \
+        -optim adam -adam_beta2 0.998 -decay_method noam -warmup_steps 8000 -learning_rate 2 \
+        -max_grad_norm 0 -param_init 0  -param_init_glorot \
+        -label_smoothing 0.1  
+}
