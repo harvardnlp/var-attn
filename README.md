@@ -56,11 +56,12 @@ sed -e "s/@@ //g" $model.out | perl tools/multi-bleu.perl data/iwslt14-de-en/tes
 ```
 
 ## Trained Models
+Models with the lowest validation PPL were selected for evaluation on test.
 * [Soft](http://lstm.seas.harvard.edu/latex/var_attn/model_soft_b6_acc_64.89_ppl_6.59_e11.pt)
-and [test output](http://lstm.seas.harvard.edu/latex/var_attn/model_soft_b6_acc_64.89_ppl_6.59_e11.pt.out)
+and [test output](http://lstm.seas.harvard.edu/latex/var_attn/model_soft_b6_acc_64.89_ppl_6.59_e11.pt.out) BLEU: 32.77
 * [Exact](http://lstm.seas.harvard.edu/latex/var_attn/model_exact_b6_acc_65.18_ppl_5.82_e11.pt)
-and [test output](http://lstm.seas.harvard.edu/latex/var_attn/model_exact_b6_acc_65.18_ppl_5.82_e11.pt.out)
+and [test output](http://lstm.seas.harvard.edu/latex/var_attn/model_exact_b6_acc_65.18_ppl_5.82_e11.pt.out) BLEU: 33.29
 * [VAE Exact ELBO](http://lstm.seas.harvard.edu/latex/var_attn/model_cat_enum_b6_acc_75.20_ppl_6.23_e10.pt)
-and [test output](http://lstm.seas.harvard.edu/latex/var_attn/model_cat_enum_b6_acc_75.20_ppl_6.23_e10.pt.out)
+and [test output](http://lstm.seas.harvard.edu/latex/var_attn/model_cat_enum_b6_acc_75.20_ppl_6.23_e10.pt.out) BLEU: 33.69
 * [VAE REINFORCE](http://lstm.seas.harvard.edu/latex/var_attn/model_cat_sample_b6_acc_74.52_ppl_6.53_e12.pt)
-and [test output](http://lstm.seas.harvard.edu/latex/var_attn/model_cat_sample_b6_acc_74.52_ppl_6.53_e12.pt.out)
+and [test output](http://lstm.seas.harvard.edu/latex/var_attn/model_cat_sample_b6_acc_74.52_ppl_6.53_e12.pt.out) BLEU: 33.30
