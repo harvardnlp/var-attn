@@ -35,13 +35,13 @@ source va.sh && CUDA_VISIBLE_DEVICES=0 train_soft_b6
 ```bash
 source va.sh && CUDA_VISIBLE_DEVICES=0 train_exact_b6
 ```
-* Variational categorical attention with REINFORCE
-```bash
-source va.sh && CUDA_VISIBLE_DEVICES=0 train_cat_sample_b6
-```
 * Variational categorical attention with exact ELBO
 ```bash
 source va.sh && CUDA_VISIBLE_DEVICES=0 train_cat_enum_b6
+```
+* Variational categorical attention with REINFORCE
+```bash
+source va.sh && CUDA_VISIBLE_DEVICES=0 train_cat_sample_b6
 ```
 
 ### Evaluating on test
