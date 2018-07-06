@@ -43,17 +43,16 @@ source va.sh && CUDA_VISIBLE_DEVICES=0 train_cat_enum_b6
 ```bash
 source va.sh && CUDA_VISIBLE_DEVICES=0 train_cat_sample_b6
 ```
+Checkpoints will be saved to the project's root directory.
 
 ### Evaluating on test
 The exact perplexity of the generative model can be obtained by running
 the following command with `$model` replaced with a saved checkpoint.
-
 ```bash
 source va.sh && CUDA_VISIBLE_DEVICES=0 eval_cat $model
 ```
 
 The model can also be used to generate translations of the test data:
-
 ```bash
 source va.sh && CUDA_VISIBLE_DEVICES=0 gen_cat $model
 sed -e "s/@@ //g" $model.out | perl tools/multi-bleu.perl data/iwslt14-de-en/test.en
