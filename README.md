@@ -57,6 +57,7 @@ sed -e "s/@@ //g" $model.out | perl tools/multi-bleu.perl data/iwslt14-de-en/tes
 
 ## Trained Models
 Models with the lowest validation PPL were selected for evaluation on test.
+
 | Model | Test PPL  | Test BLEU |
 | ----- | --------: | --------: |
 | [Soft](http://lstm.seas.harvard.edu/latex/var_attn/model_soft_b6_acc_64.89_ppl_6.59_e11.pt) | 7.17 (soft) | [32.77](http://lstm.seas.harvard.edu/latex/var_attn/model_soft_b6_acc_64.89_ppl_6.59_e11.pt.out) |
