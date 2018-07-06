@@ -55,3 +55,12 @@ source va.sh && CUDA_VISIBLE_DEVICES=0 gen_cat $model
 sed -e "s/@@ //g" $model.out | perl tools/multi-bleu.perl data/iwslt14-de-en/test.en
 ```
 
+## Trained Models
+* (Soft)[http://lstm.seas.harvard.edu/latex/var_attn/model_soft_b6_acc_64.89_ppl_6.59_e11.pt]
+and (test output)[http://lstm.seas.harvard.edu/latex/var_attn/model_soft_b6_acc_64.89_ppl_6.59_e11.pt.out]
+* (Exact)[http://lstm.seas.harvard.edu/latex/var_attn/model_exact_b6_acc_65.18_ppl_5.82_e11.pt]
+and (test output)[http://lstm.seas.harvard.edu/latex/var_attn/model_exact_b6_acc_65.18_ppl_5.82_e11.pt.out]
+* (VAE Exact ELBO)[http://lstm.seas.harvard.edu/latex/var_attn/model_cat_enum_b6_acc_75.20_ppl_6.23_e10.pt]
+and (test output)[http://lstm.seas.harvard.edu/latex/var_attn/model_cat_enum_b6_acc_75.20_ppl_6.23_e10.pt.out]
+* (VAE REINFORCE)[http://lstm.seas.harvard.edu/latex/var_attn/model_cat_sample_b6_acc_74.52_ppl_6.53_e12.pt]
+and (test output)[http://lstm.seas.harvard.edu/latex/var_attn/model_cat_sample_b6_acc_74.52_ppl_6.53_e12.pt.out]
