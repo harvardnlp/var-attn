@@ -217,7 +217,7 @@ gen_cat_k() {
             -eos_norm 3 \
             -gpu 0 \
             -output $model.$k.out \
-            -model $mode
+            -model $model
     done
 }
 
