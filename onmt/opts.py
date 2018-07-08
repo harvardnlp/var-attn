@@ -126,6 +126,9 @@ def model_opts(parser):
     group.add_argument("-n_samples", type=int, default=1,
                        help="""Number of samples to estimate log marginal.
                        """)
+    group.add_argument("-k_max", type=int, default=0,
+                       help="""K max for attention evaluation.
+                       """)
     group.add_argument("-train_baseline", type=int, default=0,
                        help="""Train the basline if > 0.
                        """)
@@ -571,6 +574,8 @@ def translate_opts(parser):
     group = parser.add_argument_group('Efficiency')
     group.add_argument('-batch_size', type=int, default=30,
                        help='Batch size')
+    group.add_argument('-k', type=int, default=0,
+                       help='K-max')
     group.add_argument('-gpu', type=int, default=-1,
                        help="Device to run on")
 

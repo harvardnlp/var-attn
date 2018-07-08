@@ -26,7 +26,7 @@ def make_translator(opt, report_score=True, out_file=None):
 
     fields, model, model_opt = \
         onmt.ModelConstructor.load_test_model(opt, dummy_opt.__dict__)
-
+    model.k = opt.k
     scorer = onmt.translate.GNMTGlobalScorer(opt.alpha,
                                              opt.beta,
                                              opt.coverage_penalty,

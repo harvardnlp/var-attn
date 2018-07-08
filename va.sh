@@ -204,3 +204,20 @@ gen_cat() {
         -model $model
 }
 
+gen_cat_k() {
+    model=$1
+    for k in 1 2 3 4 5; do
+        python translate.py \
+            -src data/iwslt14-de-en/test.de.bpe \
+            -beam_size 10 \
+            -k $k \
+            -batch_size 2 \
+            -length_penalty wu \
+            -alpha 1 \
+            -eos_norm 3 \
+            -gpu 0 \
+            -output $model.$k.out \
+            -model $mode
+    done
+}
+

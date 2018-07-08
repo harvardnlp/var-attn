@@ -314,7 +314,7 @@ class ViNMTModel(nn.Module):
     def __init__(
         self, encoder, decoder, inference_network,
         multigpu=False, dist_type="categorical", dbg=False, use_prior=False,
-        n_samples=1):
+        n_samples=1, k=0):
         self.multigpu = multigpu
         super(ViNMTModel, self).__init__()
         self.encoder = encoder
@@ -323,8 +323,9 @@ class ViNMTModel(nn.Module):
         self.dist_type = dist_type
         self.dbg = dbg
         self._use_prior = use_prior
-        self._n_samples = n_samples
+        self.n_samples = n_samples
         self.silent = False
+        self.k = k
 
     @property
     def use_prior(self):
@@ -337,12 +338,21 @@ class ViNMTModel(nn.Module):
 
     @property
     def n_samples(self):
-        return self._n_samples
+        return self.decoder.attn.n_samples
 
     @n_samples.setter
     def n_samples(self, value):
         self._n_samples = value
-        self.decoder.attn.n_samples = n_samples
+        self.decoder.attn.n_samples = value
+
+    @property
+    def k(self):
+        return self.decoder.attn.k
+
+    @k.setter
+    def k(self, value):
+        self._k = value
+        self.decoder.attn.k = value
 
     @property
     def mode(self):

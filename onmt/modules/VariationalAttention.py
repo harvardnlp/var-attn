@@ -35,6 +35,7 @@ class VariationalAttention(nn.Module):
         self.attn_type = attn_type
         self.dim = attn_dim
         dim = self.dim
+        self.k = 0
 
         if self.attn_type == "general":
             self.linear_in = nn.Linear(tgt_dim, src_dim, bias=False)
@@ -162,6 +163,11 @@ class VariationalAttention(nn.Module):
                 mask = sequence_mask(memory_lengths)
                 mask = mask.unsqueeze(1)  # Make it broadcastable.
                 scores.data.masked_fill_(1 - mask, -float('inf'))
+            if self.k > 0 and self.k < scores.size(-1):
+                topk, idx = scores.data.topk(self.k)
+                new_attn_score = torch.zeros_like(scores.data).fill_(float("-inf"))
+                new_attn_score = new_attn_score.scatter_(2, idx, topk)
+                scores = new_attn_score
             log_scores = F.log_softmax(scores, dim=-1)
             scores = log_scores.exp()
 
