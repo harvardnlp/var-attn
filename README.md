@@ -64,7 +64,7 @@ Numbers are slightly different from those reported in the paper since this is a 
 
 | Model | Test PPL  | Test BLEU |
 | ----- | --------: | --------: |
-| [Soft](http://lstm.seas.harvard.edu/latex/var_attn/model_soft_b6_acc_64.89_ppl_6.59_e11.pt) | 7.17 (soft) | [32.77](http://lstm.seas.harvard.edu/latex/var_attn/model_soft_b6_acc_64.89_ppl_6.59_e11.pt.out) |
-| [Exact](http://lstm.seas.harvard.edu/latex/var_attn/model_exact_b6_acc_65.18_ppl_5.82_e11.pt) | 6.34 (hard) | [33.29](http://lstm.seas.harvard.edu/latex/var_attn/model_exact_b6_acc_65.18_ppl_5.82_e11.pt.out) |
-| [VAE Exact ELBO](http://lstm.seas.harvard.edu/latex/var_attn/model_cat_enum_b6_acc_75.20_ppl_6.23_e10.pt) | 6.08 (hard) | [33.69](http://lstm.seas.harvard.edu/latex/var_attn/model_cat_enum_b6_acc_75.20_ppl_6.23_e10.pt.out) |
-| [VAE REINFORCE](http://lstm.seas.harvard.edu/latex/var_attn/model_cat_sample_b6_acc_74.52_ppl_6.53_e12.pt) | 6.17 (hard) | [33.30](http://lstm.seas.harvard.edu/latex/var_attn/model_cat_sample_b6_acc_74.52_ppl_6.53_e12.pt.out) |
+| [Soft](http://lstm.seas.harvard.edu/latex/var_attn/model_soft_b6_acc_64.89_ppl_6.59_e11.pt) | 7.17  | [32.77](http://lstm.seas.harvard.edu/latex/var_attn/model_soft_b6_acc_64.89_ppl_6.59_e11.pt.out) |
+| [Exact](http://lstm.seas.harvard.edu/latex/var_attn/model_exact_b6_acc_65.18_ppl_5.82_e11.pt) | 6.34 | [33.29](http://lstm.seas.harvard.edu/latex/var_attn/model_exact_b6_acc_65.18_ppl_5.82_e11.pt.out) |
+| [VAE Exact ELBO](http://lstm.seas.harvard.edu/latex/var_attn/model_cat_enum_b6_acc_75.20_ppl_6.23_e10.pt) | 6.08  | [33.69](http://lstm.seas.harvard.edu/latex/var_attn/model_cat_enum_b6_acc_75.20_ppl_6.23_e10.pt.out) |
+| [VAE REINFORCE](http://lstm.seas.harvard.edu/latex/var_attn/model_cat_sample_b6_acc_74.52_ppl_6.53_e12.pt) | 6.17 | [33.30](http://lstm.seas.harvard.edu/latex/var_attn/model_cat_sample_b6_acc_74.52_ppl_6.53_e12.pt.out) |
