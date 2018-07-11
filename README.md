@@ -1,7 +1,7 @@
 # Latent Alignment and Variational Attention
 
 This is a [Pytorch](https://github.com/pytorch/pytorch)
-implementation of the paper [Latent Alignment and Variational Attention](https://arxiv.org/abs/1802.02550)
+implementation of the paper [Latent Alignment and Variational Attention](https://arxiv.org/abs/1807.03756)
 from a fork of [OpenNMT](https://github.com/OpenNMT/OpenNMT-py).
 
 
