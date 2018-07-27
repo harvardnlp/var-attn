@@ -169,7 +169,7 @@ def model_opts(parser):
                        help="""Inference network src word vec size.""")
     group.add_argument('-inference_network_tgt_word_vec_size', type=int, default=500,
                        help="""Inference network tgt word vec size.""")
-    group.add_argument('-inference_network_dropout', type=int, default=0.3,
+    group.add_argument('-inference_network_dropout', type=float, default=0.3,
                        help="""Inference network dropout.""")
     group.add_argument('-inference_network_src_layers', type=int, default=2,
                        help='Number of layers in the inference network src RNN')
