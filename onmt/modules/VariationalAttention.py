@@ -100,11 +100,11 @@ class VariationalAttention(nn.Module):
             T = alpha.size(1)
             S = alpha.size(2)
             attns_id = torch.distributions.categorical.Categorical(
-               params.alpha.cpu().view(N*T, S)
+               params.alpha.view(N*T, S)
             ).sample(
                 torch.Size([n_samples])
             ).view(K, N, T, 1)
-            attns = torch.Tensor(K, N, T, S).zero_()
+            attns = torch.Tensor(K, N, T, S).zero_().cuda()
             attns.scatter_(3, attns_id, 1)
             attns = attns.to(params.alpha)
             # log alpha: K, N, T, S
