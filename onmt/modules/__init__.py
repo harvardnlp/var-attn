@@ -1,7 +1,8 @@
 from onmt.modules.UtilClass import LayerNorm, Elementwise
 from onmt.modules.Gate import context_gate_factory, ContextGate
 from onmt.modules.GlobalAttention import GlobalAttention
-from onmt.modules.VariationalAttention import VariationalAttention, Params
+#from onmt.modules.VariationalAttention import VariationalAttention, Params
+from onmt.modules.VariationalAttention2 import VariationalAttention, Params
 from onmt.modules.ConvMultiStepAttention import ConvMultiStepAttention
 from onmt.modules.ImageEncoder import ImageEncoder
 from onmt.modules.AudioEncoder import AudioEncoder

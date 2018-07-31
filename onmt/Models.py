@@ -731,9 +731,23 @@ class Generator(nn.Module):
         else:
             return m + (x-m.unsqueeze(dim)).exp().sum(dim, keepdim=keepdim).log()
 
-    def forward(self, input, log_pa=None, pa=None):
+    def forward(self, input, log_pa=None, pa=None, baseline_input=None):
         # log_pa: T x N x S=K
-        scores = F.log_softmax(self.proj(input), dim=-1) # target, K, batch, vocab
+        if baseline_input is None:
+            scores = F.log_softmax(self.proj(input), dim=-1) # target, K, batch, vocab
+            baseline_scores = None
+        else:
+            scores = F.log_softmax(self.proj(input), dim=-1) # target, K, batch, vocab
+            #baseline_scores = scores
+            baseline_scores = F.log_softmax(self.proj(baseline_input), dim=-1) # target, K, batch, vocab
+            """
+            # target, K, batch, vocab
+            all_scores = F.log_softmax(
+                self.proj(torch.stack([input, baseline_input], dim=0)), dim=-1
+            )
+            scores = all_scores[0]
+            baseline_scores = all_scores[1]
+            """
         if input.dim() == 3:
             # Short-circuit
             return scores
@@ -753,4 +767,4 @@ class Generator(nn.Module):
             else:
                 scores = self.logsumexp(scores, dim=1, keepdim=False)
                 scores = scores - math.log(input.size(1))
-        return scores
+        return scores, baseline_scores

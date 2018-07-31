@@ -118,6 +118,8 @@ def make_inference_network(opt, src_embeddings, tgt_embeddings,
     inference_network_tgt_layers = opt.inference_network_tgt_layers
     rnn_type = opt.rnn_type
     rnn_size = opt.inference_network_rnn_size
+    src_rnn_size = opt.inference_network_src_rnn_size
+    tgt_rnn_size = opt.inference_network_tgt_rnn_size
     dropout = opt.inference_network_dropout
     scoresFstring = opt.alpha_transformation
     scoresF = scoresF_dict[scoresFstring]
@@ -125,7 +127,8 @@ def make_inference_network(opt, src_embeddings, tgt_embeddings,
 
     print ('    * inference network type: %s'%inference_network_type)
     print ('    * inference network RNN type: %s'%rnn_type)
-    print ('    * inference network RNN size: %s'%rnn_size)
+    print ('    * inference network src RNN size: %s'%src_rnn_size)
+    print ('    * inference network tgt RNN size: %s'%tgt_rnn_size)
     print ('    * inference network dropout: %s'%dropout)
     print ('    * inference network src layers: %s'%inference_network_src_layers)
     print ('    * inference network tgt layers: %s'%inference_network_tgt_layers)
@@ -137,7 +140,8 @@ def make_inference_network(opt, src_embeddings, tgt_embeddings,
     return InferenceNetwork(inference_network_type,
                             src_embeddings, tgt_embeddings,
                             rnn_type, inference_network_src_layers,
-                            inference_network_tgt_layers, rnn_size, dropout,
+                            inference_network_tgt_layers,
+                            src_rnn_size, tgt_rnn_size, dropout,
                             attn_type=opt.q_attn_type,
                             dist_type=opt.q_dist_type,
                             scoresF=scoresF)

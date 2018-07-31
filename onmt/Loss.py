@@ -236,10 +236,12 @@ class NMTLossCompute(LossComputeBase):
 
         # Reconstruction
         # TODO(jchiu): hacky, want to set use_prior.
-        scores = self.generator(
+        #scores = self.generator(
+        scores, scores_baseline = self.generator(
             output,
             log_pa = q_log_alpha if q_log_alpha is not None else p_log_alpha,
             pa = q_alpha if q_alpha is not None else p_alpha,
+            baseline_input = output_baseline.unsqueeze(1) if output_baseline is not None else None
         )
         if self.generator.mode == 'wsram':
             log_p_y = scores # T, K, batch, S
@@ -286,10 +288,13 @@ class NMTLossCompute(LossComputeBase):
             return loss, stats
 
         scores = scores.view(-1, scores.size(-1))
-        if output_baseline is not None:
-            output_baseline = output_baseline.unsqueeze(1)
-            scores_baseline = self.generator(output_baseline)
+        #if output_baseline is not None:
+            #output_baseline = output_baseline.unsqueeze(1)
+            #scores_baseline = self.generator(output_baseline)
+            #scores_baseline = scores_baseline.view(-1, scores.size(-1))
+        if scores_baseline is not None:
             scores_baseline = scores_baseline.view(-1, scores.size(-1))
+
 
         gtruth = target.view(-1)
         if self.confidence < 1:

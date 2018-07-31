@@ -184,6 +184,10 @@ class Trainer(object):
             num_batches = -1
 
         for i, batch in enumerate(train_iter):
+            # for profiling
+            #if i > 5:
+                #exit()
+            # end profiling
             cur_dataset = train_iter.get_cur_dataset()
             self.train_loss.cur_dataset = cur_dataset
 

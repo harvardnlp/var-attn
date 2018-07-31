@@ -17,7 +17,7 @@ from onmt.Models import MeanEncoder, RNNEncoder, InputFeedRNNDecoder, NMTModel, 
 
 class InferenceNetwork(nn.Module):
     def __init__(self, inference_network_type, src_embeddings, tgt_embeddings,
-                 rnn_type, src_layers, tgt_layers, rnn_size, dropout,
+                 rnn_type, src_layers, tgt_layers, src_rnn_size, tgt_rnn_size, dropout,
                  attn_type="general",
                  dist_type="none", scoresF=F.softplus):
         super(InferenceNetwork, self).__init__()
@@ -46,11 +46,11 @@ class InferenceNetwork(nn.Module):
                                           rnn_size,
                                           dropout, tgt_embeddings, False) 
         elif inference_network_type == 'bigbrnn':
-            self.src_encoder = RNNEncoder(rnn_type, True, src_layers, 2*rnn_size,
-                                             2*rnn_size,
+            self.src_encoder = RNNEncoder(rnn_type, True, src_layers, 2*src_rnn_size,
+                                          2*src_rnn_size,
                                           dropout, src_embeddings, False) 
-            self.tgt_encoder = RNNEncoder(rnn_type, True, tgt_layers, 2*rnn_size,
-                                             2*rnn_size,
+            self.tgt_encoder = RNNEncoder(rnn_type, True, tgt_layers, 2*tgt_rnn_size,
+                                          2*tgt_rnn_size,
                                           dropout, tgt_embeddings, False) 
         elif inference_network_type == 'rnn':
             self.src_encoder = RNNEncoder(rnn_type, True, src_layers, rnn_size,
@@ -58,13 +58,15 @@ class InferenceNetwork(nn.Module):
             self.tgt_encoder = RNNEncoder(rnn_type, False, tgt_layers, rnn_size,
                                           dropout, tgt_embeddings, False) 
         if inference_network_type == "bigbrnn":
-            self.W = torch.nn.Linear(rnn_size * 2, rnn_size * 2, bias=False)
+            self.W = torch.nn.Linear(tgt_rnn_size * 2, src_rnn_size * 2, bias=False)
         else:
             self.W = torch.nn.Linear(rnn_size, rnn_size, bias=False)
-        self.rnn_size = rnn_size
+        self.src_rnn_size = src_rnn_size
+        self.tgt_rnn_size = tgt_rnn_size
 
-    def forward(self, src, tgt, src_lengths=None, src_emb=None, tgt_emb=None):
-        src_final, src_memory_bank = self.src_encoder(src, src_lengths, emb=src_emb)
+    def forward(self, src, tgt, src_lengths=None, src_emb=None, tgt_emb=None, src_memory_bank=None):
+        if src_memory_bank is None:
+            src_final, src_memory_bank = self.src_encoder(src, src_lengths, emb=src_emb)
         src_length, batch_size, rnn_size = src_memory_bank.size()
 
         tgt_final, tgt_memory_bank = self.tgt_encoder(tgt, emb=tgt_emb)
@@ -136,6 +138,130 @@ class ViRNNDecoder(InputFeedRNNDecoder):
             mode            = mode,
             attn_type       = kwargs["attn_type"],
         )
+
+    def _run_forward_pass_slow(self, tgt, memory_bank, state, memory_lengths=None,
+                          q_scores=None, tgt_emb=None):
+        """
+        See StdRNNDecoder._run_forward_pass() for description
+        of arguments and return values.
+        """
+        # Additional args check.
+        input_feed = state.input_feed.squeeze(0)
+        input_feed_batch, _ = input_feed.size()
+        tgt_len, tgt_batch, _ = tgt.size()
+        aeq(tgt_batch, input_feed_batch)
+        # END Additional args check.
+
+        # Initialize local and return variables.
+        rnn_outputs = []
+        decoder_outputs = []
+        decoder_outputs_baseline = []
+        dist_infos = []
+        attns = {"std": []}
+        if q_scores is not None:
+            attns["q"] = []
+        if self._copy:
+            attns["copy"] = []
+        if self._coverage:
+            attns["coverage"] = []
+
+        emb = self.dropout(self.embeddings(tgt)) if tgt_emb is None else tgt_emb
+        assert emb.dim() == 3  # len x batch x embedding_dim
+
+        tgt_len, batch_size =  emb.size(0), emb.size(1)
+        src_len = memory_bank.size(0)
+
+        hidden = state.hidden
+        coverage = state.coverage.squeeze(0) \
+            if state.coverage is not None else None
+
+        # Input feed concatenates hidden state with
+        # input at every time step.
+        for i, emb_t in enumerate(emb.split(1)):
+            emb_t = emb_t.squeeze(0)
+            decoder_input = torch.cat([emb_t, input_feed], -1)
+
+            rnn_output, hidden = self.rnn(decoder_input.unsqueeze(0), hidden)
+            rnn_output = rnn_output.squeeze(0)
+            rnn_outputs.append(rnn_output)
+            if q_scores is not None:
+                # map over tensor-like keys
+                q_scores_i = Params(
+                    alpha=q_scores.alpha[i],
+                    log_alpha=q_scores.log_alpha[i],
+                    dist_type=q_scores.dist_type,
+                )
+            else:
+                q_scores_i = None
+            decoder_output_y, decoder_output_c, context_c, attn_c, dist_info = self.attn(
+                rnn_output,
+                memory_bank.transpose(0, 1),
+                memory_lengths=memory_lengths,
+                q_scores=q_scores_i)
+
+            dist_infos += [dist_info]
+            if self.context_gate is not None:
+                # TODO: context gate should be employed
+                # instead of second RNN transform.
+                decoder_output_c = self.context_gate(
+                    decoder_input, rnn_output, decoder_output_c
+                )
+            decoder_output_c = self.dropout(decoder_output_c)
+            input_feed = context_c
+
+            # decoder_output_y : K x N x H
+            decoder_output_y = self.dropout(decoder_output_y)
+
+            decoder_outputs += [decoder_output_y]
+            decoder_outputs_baseline += [decoder_output_c]
+            attns["std"] += [attn_c]
+            if q_scores is not None:
+                attns["q"] += [q_scores.alpha[i]]
+
+            # Update the coverage attention.
+            if self._coverage:
+                coverage = coverage + p_attn \
+                    if coverage is not None else p_attn
+                attns["coverage"] += [coverage]
+
+            # Run the forward pass of the copy attention layer.
+            if self._copy and not self._reuse_copy_attn:
+                _, copy_attn = self.copy_attn(decoder_output,
+                                              memory_bank.transpose(0, 1))
+                attns["copy"] += [copy_attn]
+            elif self._copy:
+                attns["copy"] = attns["std"]
+
+        # <BATCH ATTN>
+        # tgt_input: K x N x T x H
+        #tgt_input = torch.stack(rnn_outputs, 0).unsqueeze(0).repeat(context_y.size(0), 1, 1, 1)
+        #concat_y = torch.cat([tgt_input, context_y], -1)
+        #decoder_output_y = self.dropout(self.attn.tanh(self.attn.linear_out()))
+        # </BATCH ATTN>
+
+        q_info = Params(
+            alpha = q_scores.alpha,
+            dist_type = q_scores.dist_type,
+            samples = torch.stack([d.q.samples for d in dist_infos], dim=0)
+                if dist_infos[0].q.samples is not None else None,
+            log_alpha = q_scores.log_alpha,
+            sample_log_probs = torch.stack([d.q.sample_log_probs for d in dist_infos], dim=0)
+                if dist_infos[0].q.sample_log_probs is not None else None,
+        ) if q_scores is not None else None
+        p_info = Params(
+            alpha = torch.stack([d.p.alpha for d in dist_infos], dim=0),
+            dist_type = dist_infos[0].p.dist_type,
+            log_alpha = torch.stack([d.p.log_alpha for d in dist_infos], dim=0)
+                if dist_infos[0].p.log_alpha is not None else None,
+            samples = torch.stack([d.p.samples for d in dist_infos], dim=0)
+                if dist_infos[0].p.samples is not None else None,
+        )
+        dist_info = DistInfo(
+            q=q_info,
+            p=p_info,
+        )
+
+        return hidden, decoder_outputs, input_feed, attns, dist_info, decoder_outputs_baseline
 
     def _run_forward_pass(self, tgt, memory_bank, state, memory_lengths=None,
                           q_scores=None, tgt_emb=None):
@@ -230,6 +356,9 @@ class ViRNNDecoder(InputFeedRNNDecoder):
             elif self._copy:
                 attns["copy"] = attns["std"]
 
+        # batch sample
+        # bmm context
+        # get log probs
         q_info = Params(
             alpha = q_scores.alpha,
             dist_type = q_scores.dist_type,
@@ -419,7 +548,8 @@ class ViNMTModel(nn.Module):
         if self.inference_network is not None and not self.use_prior:
             # inference network q(z|x,y)
             q_scores = self.inference_network(
-                src, inftgt, lengths, src_emb=src_emb, tgt_emb=inftgt_emb) # batch_size, tgt_length, src_length
+                src, inftgt, lengths, src_emb=src_emb, tgt_emb=inftgt_emb,
+                src_memory_bank = memory_bank) # batch_size, tgt_length, src_length
         else:
             q_scores = None
         decoder_outputs, dec_state, attns, dist_info, decoder_outputs_baseline = \
