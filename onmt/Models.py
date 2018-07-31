@@ -733,7 +733,7 @@ class Generator(nn.Module):
 
     def forward(self, input, log_pa=None, pa=None):
         # log_pa: T x N x S=K
-        scores = F.log_softmax(self.proj(input), dim=-1)
+        scores = F.log_softmax(self.proj(input), dim=-1) # target, K, batch, vocab
         if input.dim() == 3:
             # Short-circuit
             return scores
@@ -748,6 +748,8 @@ class Generator(nn.Module):
                 # for exact elbo
                 scores = scores * pa.transpose(1,2).unsqueeze(-1)
                 scores = scores.sum(dim=1, keepdim=False)
+            elif self.mode == "wsram":
+                return scores
             else:
                 scores = self.logsumexp(scores, dim=1, keepdim=False)
                 scores = scores - math.log(input.size(1))

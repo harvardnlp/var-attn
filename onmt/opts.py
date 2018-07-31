@@ -120,8 +120,9 @@ def model_opts(parser):
                        rather than approximate posterior Q even during training.
                        """)
     group.add_argument("-mode", type=str, default="sample",
-                       choices=["sample", "enum", "exact"],
+                       choices=["sample", "enum", "exact", "wsram"],
                        help="""Sample or enumerate ELBO, or calculate reconstruction exactly.
+                       wsram: Ba et al "Learning Wake-Sleep Recurrent Attention Models".
                        """)
     group.add_argument("-n_samples", type=int, default=1,
                        help="""Number of samples to estimate log marginal.

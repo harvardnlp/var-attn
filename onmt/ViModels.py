@@ -196,20 +196,22 @@ class ViRNNDecoder(InputFeedRNNDecoder):
                 q_scores=q_scores_i)
 
             dist_infos += [dist_info]
-            if self.context_gate is not None:
+            if self.context_gate is not None and decoder_output_c is not None:
                 # TODO: context gate should be employed
                 # instead of second RNN transform.
                 decoder_output_c = self.context_gate(
                     decoder_input, rnn_output, decoder_output_c
                 )
-            decoder_output_c = self.dropout(decoder_output_c)
+            if decoder_output_c is not None:
+                decoder_output_c = self.dropout(decoder_output_c)
             input_feed = context_c
 
             # decoder_output_y : K x N x H
             decoder_output_y = self.dropout(decoder_output_y)
 
             decoder_outputs += [decoder_output_y]
-            decoder_outputs_baseline += [decoder_output_c]
+            if decoder_output_c is not None:
+                decoder_outputs_baseline += [decoder_output_c]
             attns["std"] += [attn_c]
             if q_scores is not None:
                 attns["q"] += [q_scores.alpha[i]]
@@ -236,6 +238,12 @@ class ViRNNDecoder(InputFeedRNNDecoder):
             log_alpha = q_scores.log_alpha,
             sample_log_probs = torch.stack([d.q.sample_log_probs for d in dist_infos], dim=0)
                 if dist_infos[0].q.sample_log_probs is not None else None,
+            sample_log_probs_q = torch.stack([d.q.sample_log_probs_q for d in dist_infos], dim=0)
+                if dist_infos[0].q.sample_log_probs_q is not None else None,
+            sample_log_probs_p = torch.stack([d.q.sample_log_probs_p for d in dist_infos], dim=0)
+                if dist_infos[0].q.sample_log_probs_p is not None else None,
+            sample_p_div_q_log = torch.stack([d.q.sample_p_div_q_log for d in dist_infos], dim=0)
+                if dist_infos[0].q.sample_p_div_q_log is not None else None,
         ) if q_scores is not None else None
         p_info = Params(
             alpha = torch.stack([d.p.alpha for d in dist_infos], dim=0),
@@ -275,7 +283,10 @@ class ViRNNDecoder(InputFeedRNNDecoder):
         # Concatenates sequence of tensors along a new dimension.
         # T x K x N x H
         decoder_outputs = torch.stack(decoder_outputs, dim=0)
-        decoder_outputs_baseline = torch.stack(decoder_outputs_baseline, dim=0)
+        if len(decoder_outputs_baseline) > 0:
+            decoder_outputs_baseline = torch.stack(decoder_outputs_baseline, dim=0)
+        else:
+            decoder_outputs_baseline = None
         for k in attns:
             attns[k] = torch.stack(attns[k])
 
@@ -360,7 +371,7 @@ class ViNMTModel(nn.Module):
 
     @mode.setter
     def mode(self, value):
-        assert value in ["sample", "enum", "exact"]
+        assert value in ["sample", "enum", "exact", "wsram"]
         if not self.silent:
             print("switching mode to {}".format(value))
         self.decoder.attn.mode = value

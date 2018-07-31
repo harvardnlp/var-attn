@@ -206,7 +206,12 @@ class NMTLossCompute(LossComputeBase):
                 if dist_info.q.dist_type == "categorical":
                     state["q_alpha"] = dist_info.q.alpha
                     state["q_log_alpha"] = dist_info.q.log_alpha
-                    state["q_sample_log_probs"] = dist_info.q.sample_log_probs
+                    if self.generator.mode != 'wsram':
+                        state["q_sample_log_probs"] = dist_info.q.sample_log_probs
+                    else:
+                        state["sample_log_probs_q"] = dist_info.q.sample_log_probs_q
+                        state["sample_log_probs_p"] = dist_info.q.sample_log_probs_p
+                        state["sample_p_div_q_log"] = dist_info.q.sample_p_div_q_log
                 else:
                     raise Exception("Unimplemented distribution")
 
@@ -221,10 +226,14 @@ class NMTLossCompute(LossComputeBase):
         q_log_alpha=None,
         q_sample_log_probs=None,
         p_log_alpha=None,
-        output_baseline=None
+        output_baseline=None,
+        sample_log_probs_q=None,
+        sample_log_probs_p=None,
+        sample_p_div_q_log=None,
     ):
-        if self.generator.mode in ["enum", "exact"]:
+        if self.generator.mode in ["enum", "exact", "wsram"]:
             output_baseline = None
+
         # Reconstruction
         # TODO(jchiu): hacky, want to set use_prior.
         scores = self.generator(
@@ -232,6 +241,50 @@ class NMTLossCompute(LossComputeBase):
             log_pa = q_log_alpha if q_log_alpha is not None else p_log_alpha,
             pa = q_alpha if q_alpha is not None else p_alpha,
         )
+        if self.generator.mode == 'wsram':
+            log_p_y = scores # T, K, batch, S
+            T, K, B, _ = log_p_y.size()
+            #p_y = log_p_y.exp()
+            log_p_y_sample = log_p_y.gather(3, target.unsqueeze(1).unsqueeze(-1)
+                                            .expand(T, K, B, 1)).squeeze(3)
+            w_unnormalized = (sample_p_div_q_log + log_p_y_sample).exp() #T, K, B
+            w_normalized = w_unnormalized / w_unnormalized.sum(dim=1, keepdim=True)
+            bp = sample_p_div_q_log.exp()
+            bp = bp / bp.sum(dim=1, keepdim=True)
+            bq = 1. / K
+            target_expand = target.unsqueeze(1).expand(T, K, B).contiguous().view(-1)
+            # loss 1: w * log p (y)
+            loss1 = - w_normalized.detach() * log_p_y_sample
+            loss1 = loss1.view(-1)[target_expand.ne(self.padding_idx)].sum()
+            # loss 2: (w - bp) * log p(a)
+            loss2 = - (w_normalized - bp).detach() * sample_log_probs_p
+            loss2 = loss2.view(-1)[target_expand.ne(self.padding_idx)].sum()
+            # loss 3: (w - bq) log q a
+            loss3 = - (w_normalized - bq).detach() * sample_log_probs_q
+            loss3 = loss3.view(-1)[target_expand.ne(self.padding_idx)].sum()
+            loss = loss1+loss2+loss3
+            
+            gtruth = target.view(-1)
+            q_alpha = q_alpha.contiguous().view(-1, q_alpha.size(2))
+            q_alpha = q_alpha[gtruth.ne(self.padding_idx)]
+            p_alpha = p_alpha.contiguous().view(-1, p_alpha.size(2))
+            p_alpha = p_alpha[gtruth.ne(self.padding_idx)]
+            if self.dist_type == 'categorical':
+                q = Cat(q_alpha)
+                p = Cat(p_alpha)
+            else:
+                assert (False)
+            kl = kl_divergence(q, p).sum()
+            kl_data = kl.data
+
+            scores_first = log_p_y[:,0,:,:]
+            scores_first = scores_first.contiguous().view(-1, scores_first.size(-1))
+            xent = self.criterion(scores_first, gtruth)
+            xent_data = xent.data
+
+            stats = self._stats(xent_data, kl_data, scores_first.data, target.view(-1).data)
+            return loss, stats
+
         scores = scores.view(-1, scores.size(-1))
         if output_baseline is not None:
             output_baseline = output_baseline.unsqueeze(1)
@@ -295,9 +348,7 @@ class NMTLossCompute(LossComputeBase):
                 loss = loss + xent_baseline
 
         kl_data = kl.data.clone()
-
         stats = self._stats(xent_data, kl_data, scores.data, target.view(-1).data)
-
         return loss, stats
 
 

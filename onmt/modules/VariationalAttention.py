@@ -100,13 +100,13 @@ class VariationalAttention(nn.Module):
             T = alpha.size(1)
             S = alpha.size(2)
             attns_id = torch.distributions.categorical.Categorical(
-               params.alpha.view(N*T, S)
+               alpha.view(N*T, S)
             ).sample(
                 torch.Size([n_samples])
             ).view(K, N, T, 1)
             attns = torch.Tensor(K, N, T, S).zero_().cuda()
             attns.scatter_(3, attns_id, 1)
-            attns = attns.to(params.alpha)
+            attns = attns.to(alpha)
             # log alpha: K, N, T, S
             log_alpha = log_alpha.unsqueeze(0).expand(K, N, T, S)
             sample_log_probs = log_alpha.gather(3, attns_id.to(log_alpha.device)).squeeze(3)
@@ -114,6 +114,35 @@ class VariationalAttention(nn.Module):
         else:
             raise Exception("Unsupported dist")
         return attns, None
+
+    def sample_attn_wsram(self, q_scores, p_scores, n_samples=1, lengths=None, mask=None):
+        dist_type = q_scores.dist_type
+        assert p_scores.dist_type == dist_type
+        if dist_type == "categorical":
+            alpha_q = q_scores.alpha
+            log_alpha_q = q_scores.log_alpha
+            K = n_samples
+            N = alpha_q.size(0)
+            T = alpha_q.size(1)
+            S = alpha_q.size(2)
+            attns_id = torch.distributions.categorical.Categorical(
+               alpha_q.view(N*T, S)
+            ).sample(
+                torch.Size([n_samples])
+            ).view(K, N, T, 1)
+            attns = torch.Tensor(K, N, T, S).zero_().cuda()
+            attns.scatter_(3, attns_id, 1)
+            q_sample = attns.to(alpha_q)
+            # log alpha: K, N, T, S
+            log_alpha_q = log_alpha_q.unsqueeze(0).expand(K, N, T, S)
+            sample_log_probs_q = log_alpha_q.gather(3, attns_id.to(log_alpha_q.device)).squeeze(3)
+            log_alpha_p = p_scores.log_alpha
+            log_alpha_p = log_alpha_p.unsqueeze(0).expand(K, N, T, S)
+            sample_log_probs_p = log_alpha_p.gather(3, attns_id.to(log_alpha_p.device)).squeeze(3)
+            sample_p_div_q_log = sample_log_probs_p - sample_log_probs_q
+            return q_sample, sample_log_probs_q, sample_log_probs_p, sample_p_div_q_log
+        else:
+            raise Exception("Unsupported dist")
 
     def forward(self, input, memory_bank, memory_lengths=None, coverage=None, q_scores=None):
         """
@@ -182,13 +211,17 @@ class VariationalAttention(nn.Module):
         # each context vector c_t is the weighted average
         # over all the source hidden states
         context_c = torch.bmm(c_align_vectors, memory_bank)
-        concat_c = torch.cat([input, context_c], -1)
-        # N x T x H
-        h_c = self.tanh(self.linear_out(concat_c))
+        if self.mode != 'wsram':
+            concat_c = torch.cat([input, context_c], -1)
+            # N x T x H
+            h_c = self.tanh(self.linear_out(concat_c))
+        else:
+            h_c = None
 
         # sample or enumerate
         # y_align_vectors: K x N x T x S
         q_sample, p_sample, sample_log_probs = None, None, None
+        sample_log_probs_q, sample_log_probs_p, sample_p_div_q_log = None, None, None
         if self.mode == "sample":
             if q_scores is None or self.use_prior:
                 p_sample, sample_log_probs = self.sample_attn(
@@ -202,6 +235,14 @@ class VariationalAttention(nn.Module):
                 y_align_vectors = q_sample
         elif self.mode == "enum" or self.mode == "exact":
             y_align_vectors = None
+        elif self.mode == "wsram":
+            assert q_scores is not None
+            q_sample, sample_log_probs_q, sample_log_probs_p, sample_p_div_q_log = self.sample_attn_wsram(
+                q_scores, p_scores, n_samples=self.n_samples,
+                lengths=memory_lengths, mask=mask if memory_lengths is not None else None)
+            y_align_vectors = q_sample
+
+
         # context_y: K x N x T x H
         if y_align_vectors is not None:
             context_y = torch.bmm(
@@ -221,8 +262,9 @@ class VariationalAttention(nn.Module):
         h_y = self.tanh(self.linear_out(concat_y))
 
         if one_step:
-            # N x H
-            h_c = h_c.squeeze(1)
+            if h_c is not None:
+                # N x H
+                h_c = h_c.squeeze(1)
             # N x S
             c_align_vectors = c_align_vectors.squeeze(1)
             context_c = context_c.squeeze(1)
@@ -237,6 +279,9 @@ class VariationalAttention(nn.Module):
                 dist_type = q_scores.dist_type,
                 samples = q_sample.squeeze(2) if q_sample is not None else None,
                 sample_log_probs = sample_log_probs.squeeze(2) if sample_log_probs is not None else None,
+                sample_log_probs_q = sample_log_probs_q.squeeze(2) if sample_log_probs_q is not None else None,
+                sample_log_probs_p = sample_log_probs_p.squeeze(2) if sample_log_probs_p is not None else None,
+                sample_p_div_q_log = sample_p_div_q_log.squeeze(2) if sample_p_div_q_log is not None else None,
             ) if q_scores is not None else None
             p_scores = Params(
                 alpha = p_scores.alpha.squeeze(1),
@@ -245,13 +290,15 @@ class VariationalAttention(nn.Module):
                 samples = p_sample.squeeze(2) if p_sample is not None else None,
             )
 
-            # Check output sizes
-            batch_, dim_ = h_c.size()
-            aeq(batch, batch_)
-            batch_, sourceL_ = c_align_vectors.size()
-            aeq(batch, batch_)
-            aeq(sourceL, sourceL_)
+            if h_c is not None:
+                # Check output sizes
+                batch_, dim_ = h_c.size()
+                aeq(batch, batch_)
+                batch_, sourceL_ = c_align_vectors.size()
+                aeq(batch, batch_)
+                aeq(sourceL, sourceL_)
         else:
+            assert False
             # Only support input feeding.
             # T x N x H
             h_c = h_c.transpose(0, 1).contiguous()

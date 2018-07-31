@@ -3,7 +3,10 @@ from collections import namedtuple
 import torch
 
 
-Params = namedtuple("Params", ["alpha", "log_alpha", "sample_log_probs", "mu", "sigma", "dist_type", "samples"])
+Params = namedtuple("Params", ["alpha", "log_alpha", "sample_log_probs",
+                               "mu", "sigma", "dist_type", "samples",
+                               "sample_log_probs_q", "sample_log_probs_p",
+                               "sample_p_div_q_log"])
 Params.__new__.__defaults__ = (None,) * len(Params._fields)
 
 DistInfo = namedtuple("DistInfo", ["p", "q"])

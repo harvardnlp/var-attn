@@ -294,6 +294,7 @@ def make_base_model(model_opt, fields, gpu, checkpoint=None):
         else ViNMTModel(
             encoder, decoder,
             inference_network,
+            n_samples=model_opt.n_samples,
             dist_type=model_opt.p_dist_type,
             dbg=model_opt.dbg_inf,
             use_prior=model_opt.use_generative_model > 0)

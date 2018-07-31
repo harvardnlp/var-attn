@@ -210,6 +210,7 @@ class Trainer(object):
                             total_stats._start_time, self.optim.lr,
                             report_stats)
                     self.progress_step += 1
+                    sys.stdout.flush()
 
                 true_batchs = []
                 accum = 0
@@ -242,7 +243,8 @@ class Trainer(object):
         stats = Statistics()
 
         with torch.no_grad():
-            for batch in valid_iter:
+            for iii,batch in enumerate(valid_iter):
+                sys.stdout.flush()
                 cur_dataset = valid_iter.get_cur_dataset()
                 self.valid_loss.cur_dataset = cur_dataset
 
