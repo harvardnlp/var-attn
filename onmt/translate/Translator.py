@@ -333,7 +333,8 @@ class Translator(object):
             if not self.copy_attn:
                 dec_out = dec_out.unsqueeze(0)
                 if isinstance(self.model, onmt.ViModels.ViNMTModel):
-                    out = self.model.generator.forward(dec_out, log_pa=dist_info.p.log_alpha).data
+                    # generator gives (output, baseline_output)
+                    out = self.model.generator.forward(dec_out, log_pa=dist_info.p.log_alpha)[0].data
                     # huh?
                 else:
                     out = self.model.generator.forward(dec_out).data

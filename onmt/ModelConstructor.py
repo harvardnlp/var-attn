@@ -117,9 +117,8 @@ def make_inference_network(opt, src_embeddings, tgt_embeddings,
     inference_network_src_layers = opt.inference_network_src_layers
     inference_network_tgt_layers = opt.inference_network_tgt_layers
     rnn_type = opt.rnn_type
-    rnn_size = opt.inference_network_rnn_size
-    src_rnn_size = opt.inference_network_src_rnn_size
-    tgt_rnn_size = opt.inference_network_tgt_rnn_size
+    src_rnn_size = opt.inference_network_src_rnn_size if hasattr(opt, "inference_network_src_rnn_size") else opt.inference_network_rnn_size
+    tgt_rnn_size = opt.inference_network_tgt_rnn_size if hasattr(opt, "inference_network_tgt_rnn_size") else opt.inference_network_rnn_size
     dropout = opt.inference_network_dropout
     scoresFstring = opt.alpha_transformation
     scoresF = scoresF_dict[scoresFstring]
@@ -222,7 +221,8 @@ def load_test_model(opt, dummy_opt):
 
     model_opt = checkpoint['opt']
     for arg in dummy_opt:
-        if arg not in model_opt:
+        # hack for handling src_rnn_size and tgt_rnn_size
+        if arg not in model_opt and "inference_network" not in arg:
             model_opt.__dict__[arg] = dummy_opt[arg]
 
     model = make_base_model(model_opt, fields,

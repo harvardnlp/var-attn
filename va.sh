@@ -297,7 +297,8 @@ train_cat_sample_dbg_fast() {
         -batch_size 6 \
         -encoder_type brnn \
         -inference_network_type bigbrnn \
-        -inference_network_rnn_size 512 \
+        -inference_network_src_rnn_size 512 \
+        -inference_network_tgt_rnn_size 512 \
         -src_word_vec_size 512 \
         -tgt_word_vec_size 512 \
         -memory_size 1024 \
@@ -315,7 +316,7 @@ train_cat_sample_dbg_fast() {
         -n_samples 1 \
         -start_decay_at 2 \
         -learning_rate_decay 0.5 \
-        -report_every 1000 | tee $name.log
+        -report_every 100 #0 | tee $name.log
 }
 
 train_cat_sample_dbg_fast_smalltgt() {
@@ -349,18 +350,17 @@ train_cat_sample_dbg_fast_smalltgt() {
         -n_samples 1 \
         -start_decay_at 2 \
         -learning_rate_decay 0.5 \
-        -report_every 1000 | tee $name.log
+        -report_every 100 #0 | tee $name.log
 }
 
-train_exact_b6_smalltgt() {
+train_cat_enum_b6_smalltgt() {
     gpuid=0
     seed=3435
-    name=model_exact_b6_smalltgt
+    name=model_cat_enum_b6_smalltgt
     python train.py \
         -data $DATA \
         -save_model $name -gpuid $gpuid -seed $seed \
-        -mode exact \
-        -use_generative_model 1 \
+        -mode enum \
         -batch_size 6 \
         -encoder_type brnn \
         -inference_network_type bigbrnn \
@@ -385,6 +385,7 @@ train_exact_b6_smalltgt() {
         -learning_rate_decay 0.5 \
         -report_every 1000 | tee $name.log
 }
+
 
 
 train_soft_dbg() {
