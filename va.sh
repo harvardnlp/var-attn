@@ -423,7 +423,8 @@ train_exact_dbg() {
         -batch_size 6 \
         -encoder_type brnn \
         -inference_network_type bigbrnn \
-        -inference_network_rnn_size 512 \
+        -inference_network_src_rnn_size 512 \
+        -inference_network_tgt_rnn_size 512 \
         -src_word_vec_size 512 \
         -tgt_word_vec_size 512 \
         -memory_size 1024 \
@@ -442,5 +443,38 @@ train_exact_dbg() {
         -start_decay_at 2 \
         -learning_rate_decay 0.5 \
         -report_every 100
+}
+
+train_cat_wsram_b6_dbg() {
+    gpuid=0
+    seed=3435
+    name=model_cat_wsram_b6
+    python train.py \
+        -data $DATA \
+        -save_model $name -gpuid $gpuid -seed $seed \
+        -mode wsram \
+        -batch_size 6 \
+        -encoder_type brnn \
+        -inference_network_type bigbrnn \
+        -inference_network_tgt_rnn_size 512 \
+        -inference_network_src_rnn_size 512 \
+        -src_word_vec_size 512 \
+        -tgt_word_vec_size 512 \
+        -memory_size 1024 \
+        -decoder_rnn_size 768 \
+        -attention_size 512 \
+        -accum_count 1 \
+        -valid_batch_size 6 \
+        -epochs 30 \
+        -p_dist_type categorical \
+        -q_dist_type categorical \
+        -alpha_transformation sm \
+        -global_attention mlp \
+        -optim adam -learning_rate 3e-4 \
+        -adam_eps 1e-8 \
+        -n_samples 5 \
+        -start_decay_at 2 \
+        -learning_rate_decay 0.5 \
+        -report_every 100 #0 | tee $name.log
 }
 

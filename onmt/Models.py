@@ -750,7 +750,7 @@ class Generator(nn.Module):
             """
         if input.dim() == 3:
             # Short-circuit
-            return scores
+            return scores, None
         if scores.size(1) == 1:
             scores = scores.squeeze(1)
         else:
@@ -763,7 +763,7 @@ class Generator(nn.Module):
                 scores = scores * pa.transpose(1,2).unsqueeze(-1)
                 scores = scores.sum(dim=1, keepdim=False)
             elif self.mode == "wsram":
-                return scores
+                return scores, None
             else:
                 scores = self.logsumexp(scores, dim=1, keepdim=False)
                 scores = scores - math.log(input.size(1))
