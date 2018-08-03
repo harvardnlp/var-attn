@@ -249,9 +249,11 @@ class NMTLossCompute(LossComputeBase):
                                             .expand(T, K, B, 1)).squeeze(3)
             w_unnormalized = (sample_p_div_q_log + log_p_y_sample).exp() #T, K, B
             w_normalized = w_unnormalized / w_unnormalized.sum(dim=1, keepdim=True)
-            bp = sample_p_div_q_log.exp()
-            bp = bp / bp.sum(dim=1, keepdim=True)
-            bq = 1. / K
+            #bp = sample_p_div_q_log.exp()
+            #bp = bp / bp.sum(dim=1, keepdim=True)
+            #bq = 1. / K
+            bp = 0
+            bq = 0
             target_expand = target.unsqueeze(1).expand(T, K, B).contiguous().view(-1)
             # loss 1: w * log p (y)
             loss1 = - w_normalized.detach() * log_p_y_sample
