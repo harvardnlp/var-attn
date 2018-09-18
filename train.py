@@ -206,7 +206,7 @@ def make_dataset_iter(datasets, fields, opt, is_train=True, random_state=None):
             tgt_elements = count * max_tgt_in_batch
             return max(src_elements, tgt_elements)
 
-    device = opt.gpuid[0] if opt.gpuid else -1
+    device = 'cuda' if opt.gpuid else 'cpu'
 
     return DatasetLazyIter(datasets, fields, batch_size, batch_size_fn,
                            device, is_train, random_state=random_state)

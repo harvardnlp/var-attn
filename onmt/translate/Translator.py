@@ -144,7 +144,7 @@ class Translator(object):
                                      use_filter_pred=self.use_filter_pred)
 
         data_iter = onmt.io.OrderedIterator(
-            dataset=data, device=self.gpu,
+            dataset=data, device='cuda' if self.gpu>-1 else 'cpu',
             batch_size=batch_size, train=False, sort=False,
             sort_within_batch=True, shuffle=False)
 
