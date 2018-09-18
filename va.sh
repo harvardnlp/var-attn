@@ -214,8 +214,8 @@ eval_cat() {
     python train.py \
         -data $DATATEST \
         -eval_with $model \
-        -save_model none -gpuid 0 -seed 131 -encoder_type brnn -batch_size 8 \
-        -accum_count 1 -valid_batch_size 2 -epochs 30 -inference_network_type bigbrnn \
+        -save_model none -gpuid 0 -seed 131 -encoder_type brnn -batch_size 4 \
+        -accum_count 1 -valid_batch_size 1 -epochs 30 -inference_network_type bigbrnn \
         -p_dist_type categorical -q_dist_type categorical -alpha_transformation sm \
         -global_attention mlp \
         -optim adam -learning_rate 3e-4 -n_samples 1 -mode sample \

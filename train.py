@@ -126,13 +126,14 @@ class DatasetLazyIter(object):
     """
 
     def __init__(self, datasets, fields, batch_size, batch_size_fn,
-                 device, is_train):
+                 device, is_train, random_state=None):
         self.datasets = datasets
         self.fields = fields
         self.batch_size = batch_size
         self.batch_size_fn = batch_size_fn
         self.device = device
         self.is_train = is_train
+        self.random_state = random_state
 
         self.cur_iter = self._next_dataset_iterator(datasets)
         # We have at least one dataset.
@@ -141,8 +142,11 @@ class DatasetLazyIter(object):
     def __iter__(self):
         dataset_iter = (d for d in self.datasets)
         while self.cur_iter is not None:
+            if self.random_state is not None:
+                self.cur_iter.random_shuffler._random_state = self.random_state
             for batch in self.cur_iter:
                 yield batch
+            self.random_state = self.cur_iter.random_shuffler._random_state
             self.cur_iter = self._next_dataset_iterator(dataset_iter)
 
     def __len__(self):
@@ -174,7 +178,7 @@ class DatasetLazyIter(object):
             repeat=False)
 
 
-def make_dataset_iter(datasets, fields, opt, is_train=True):
+def make_dataset_iter(datasets, fields, opt, is_train=True, random_state=None):
     """
     This returns user-defined train/validate data iterator for the trainer
     to iterate over during each train epoch. We implement simple
@@ -202,10 +206,10 @@ def make_dataset_iter(datasets, fields, opt, is_train=True):
             tgt_elements = count * max_tgt_in_batch
             return max(src_elements, tgt_elements)
 
-    device = opt.gpuid[0] if opt.gpuid else -1
+    device = 'cuda' if opt.gpuid else 'cpu'
 
     return DatasetLazyIter(datasets, fields, batch_size, batch_size_fn,
-                           device, is_train)
+                           device, is_train, random_state=random_state)
 
 
 def make_loss_compute(model, tgt_vocab, opt, train=True):
@@ -281,24 +285,15 @@ def train_model(model, fields, optim, data_type, model_opt):
     print(' * number of epochs: %d, starting from Epoch %d' %
           (opt.epochs + 1 - opt.start_epoch, opt.start_epoch))
     print(' * batch size: %d' % opt.batch_size)
-    # Hack to allow shuffling between epochs
-    train_dataset = next(lazily_load_dataset("train"))
-    train_dataset.fields = fields
-    device = opt.gpuid[0] if opt.gpuid else -1
-    train_iter = onmt.io.OrderedIterator(
-        dataset=train_dataset, batch_size=opt.batch_size,
-        batch_size_fn=None,
-        device=device, train=True,
-        sort=False, sort_within_batch=True,
-        repeat=False)
-    train_iter.get_cur_dataset = lambda: train_dataset
+    random_state = None
     for epoch in range(opt.start_epoch, opt.epochs + 1):
         print('')
 
         # 1. Train for one epoch on the training set.
-        #train_iter = make_dataset_iter(lazily_load_dataset("train"),
-                                       #fields, opt)
+        train_iter = make_dataset_iter(lazily_load_dataset("train"),
+                                       fields, opt, random_state=random_state)
         train_stats = trainer.train(train_iter, epoch, report_func)
+        random_state = train_iter.random_state
         print('Train exp(elbo): %g' % train_stats.expelbo())
         print('Train perplexity: %g' % train_stats.ppl())
         print('Train xent: %g' % train_stats.xent())
