@@ -231,7 +231,7 @@ class NMTLossCompute(LossComputeBase):
         sample_log_probs_p=None,
         sample_p_div_q_log=None,
     ):
-        if self.generator.mode in ["enum", "exact", "wsram"]:
+        if self.generator.mode in ["enum", "exact", "wsram", "gumbel"]:
             output_baseline = None
 
         # Reconstruction
@@ -344,6 +344,8 @@ class NMTLossCompute(LossComputeBase):
             loss = xent
 
         # subtract reward
+        if self.generator.mode == 'gumbel':
+            assert q_sample_log_probs is None
         if q_sample_log_probs is not None:
             loss = loss - (reward * q_sample_log_probs).sum()
             if self.train_baseline:

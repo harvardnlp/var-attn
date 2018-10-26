@@ -123,11 +123,13 @@ class ViRNNDecoder(InputFeedRNNDecoder):
         scoresF = kwargs.pop("scoresF")
         n_samples = kwargs.pop("n_samples")
         mode = kwargs.pop("mode")
+        temperature = kwargs.pop("temperature")
         super(ViRNNDecoder, self).__init__(*args, **kwargs)
         self.attn = onmt.modules.VariationalAttention(
             src_dim         = self.memory_size,
             tgt_dim         = self.hidden_size,
             attn_dim        = self.attn_size,
+            temperature     = temperature,
             p_dist_type     = p_dist_type,
             q_dist_type     = q_dist_type,
             use_prior       = use_prior,
@@ -371,7 +373,7 @@ class ViNMTModel(nn.Module):
 
     @mode.setter
     def mode(self, value):
-        assert value in ["sample", "enum", "exact", "wsram"]
+        assert value in ["sample", "enum", "exact", "wsram", "gumbel"]
         if not self.silent:
             print("switching mode to {}".format(value))
         self.decoder.attn.mode = value

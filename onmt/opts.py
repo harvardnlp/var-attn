@@ -120,7 +120,7 @@ def model_opts(parser):
                        rather than approximate posterior Q even during training.
                        """)
     group.add_argument("-mode", type=str, default="sample",
-                       choices=["sample", "enum", "exact", "wsram"],
+                       choices=["sample", "enum", "exact", "wsram", "gumbel"],
                        help="""Sample or enumerate ELBO, or calculate reconstruction exactly.
                        wsram: Ba et al "Learning Wake-Sleep Recurrent Attention Models".
                        """)
@@ -159,6 +159,8 @@ def model_opts(parser):
     group.add_argument("-dbg_inf", type=int, default=0,
                     help="""Feed dbg flag to inference network.
                     """)
+    group.add_argument('-temperature', type=float, default=1.0,
+                       help="""Gumbel Softmax temperature.""")
     group.add_argument('-inference_network_type', type=str, default='none',
                        choices=['rnn', 'bigbrnn', 'brnn', 'embedding_only', 'none'],
                        help="""Type of inference network to use.

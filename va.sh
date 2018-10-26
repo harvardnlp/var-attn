@@ -57,6 +57,136 @@ train_cat_sample_b6() {
         -report_every 1000 | tee $name.log
 }
 
+train_cat_gumbel_b6_t1() {
+    gpuid=0
+    seed=3435
+    name=model_cat_gumbel_b6_t1
+    python train.py \
+        -data $DATA \
+        -save_model $name -gpuid $gpuid -seed $seed \
+        -mode gumbel \
+        -batch_size 6 \
+        -temperature 1 \
+        -encoder_type brnn \
+        -inference_network_type bigbrnn \
+        -inference_network_rnn_size 512 \
+        -src_word_vec_size 512 \
+        -tgt_word_vec_size 512 \
+        -memory_size 1024 \
+        -decoder_rnn_size 768 \
+        -attention_size 512 \
+        -accum_count 1 \
+        -valid_batch_size 2 \
+        -epochs 30 \
+        -p_dist_type categorical \
+        -q_dist_type categorical \
+        -alpha_transformation sm \
+        -global_attention mlp \
+        -optim adam -learning_rate 3e-4 \
+        -adam_eps 1e-8 \
+        -n_samples 1 \
+        -start_decay_at 2 \
+        -learning_rate_decay 0.5 \
+        -report_every 1000 | tee $name.log
+}
+train_cat_gumbel_b6_t05() {
+    gpuid=0
+    seed=3435
+    name=model_cat_gumbel_b6_t05
+    python train.py \
+        -data $DATA \
+        -save_model $name -gpuid $gpuid -seed $seed \
+        -mode gumbel \
+        -batch_size 6 \
+        -temperature 0.5 \
+        -encoder_type brnn \
+        -inference_network_type bigbrnn \
+        -inference_network_rnn_size 512 \
+        -src_word_vec_size 512 \
+        -tgt_word_vec_size 512 \
+        -memory_size 1024 \
+        -decoder_rnn_size 768 \
+        -attention_size 512 \
+        -accum_count 1 \
+        -valid_batch_size 2 \
+        -epochs 30 \
+        -p_dist_type categorical \
+        -q_dist_type categorical \
+        -alpha_transformation sm \
+        -global_attention mlp \
+        -optim adam -learning_rate 3e-4 \
+        -adam_eps 1e-8 \
+        -n_samples 1 \
+        -start_decay_at 2 \
+        -learning_rate_decay 0.5 \
+        -report_every 1000 | tee $name.log
+}
+
+train_cat_gumbel_b6_t005() {
+    gpuid=0
+    seed=3435
+    name=model_cat_gumbel_b6_t005
+    python train.py \
+        -data $DATA \
+        -save_model $name -gpuid $gpuid -seed $seed \
+        -mode gumbel \
+        -batch_size 6 \
+        -temperature 0.05 \
+        -encoder_type brnn \
+        -inference_network_type bigbrnn \
+        -inference_network_rnn_size 512 \
+        -src_word_vec_size 512 \
+        -tgt_word_vec_size 512 \
+        -memory_size 1024 \
+        -decoder_rnn_size 768 \
+        -attention_size 512 \
+        -accum_count 1 \
+        -valid_batch_size 2 \
+        -epochs 30 \
+        -p_dist_type categorical \
+        -q_dist_type categorical \
+        -alpha_transformation sm \
+        -global_attention mlp \
+        -optim adam -learning_rate 3e-4 \
+        -adam_eps 1e-8 \
+        -n_samples 1 \
+        -start_decay_at 2 \
+        -learning_rate_decay 0.5 \
+        -report_every 1000 | tee $name.log
+}
+train_cat_gumbel_b6_t01() {
+    gpuid=0
+    seed=3435
+    name=model_cat_gumbel_b6_t01
+    python train.py \
+        -data $DATA \
+        -save_model $name -gpuid $gpuid -seed $seed \
+        -mode gumbel \
+        -batch_size 6 \
+        -temperature 0.1 \
+        -encoder_type brnn \
+        -inference_network_type bigbrnn \
+        -inference_network_rnn_size 512 \
+        -src_word_vec_size 512 \
+        -tgt_word_vec_size 512 \
+        -memory_size 1024 \
+        -decoder_rnn_size 768 \
+        -attention_size 512 \
+        -accum_count 1 \
+        -valid_batch_size 2 \
+        -epochs 30 \
+        -p_dist_type categorical \
+        -q_dist_type categorical \
+        -alpha_transformation sm \
+        -global_attention mlp \
+        -optim adam -learning_rate 3e-4 \
+        -adam_eps 1e-8 \
+        -n_samples 1 \
+        -start_decay_at 2 \
+        -learning_rate_decay 0.5 \
+        -report_every 1000 | tee $name.log
+}
+
 train_cat_wsram_b6() {
     gpuid=0
     seed=3435
