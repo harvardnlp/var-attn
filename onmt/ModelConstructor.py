@@ -197,6 +197,7 @@ def make_decoder(opt, embeddings):
             scoresF         = scoresF,
             n_samples       = opt.n_samples,
             mode            = opt.mode,
+            temperature     = opt.temperature
         )
     else:
         return StdRNNDecoder(opt.rnn_type, opt.brnn,

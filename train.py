@@ -304,7 +304,7 @@ def train_model(model, fields, optim, data_type, model_opt):
         valid_iter = make_dataset_iter(lazily_load_dataset("valid"),
                                        fields, opt,
                                        is_train=False)
-        if model.mode == 'sample' or model.mode == 'wsram':
+        if model.mode == 'sample' or model.mode == 'wsram' or model.mode == 'gumbel':
             val_mode = 'enum'
         else:
             val_mode = model.mode

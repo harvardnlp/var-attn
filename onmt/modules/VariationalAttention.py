@@ -9,10 +9,29 @@ import torch.nn.functional as F
 from onmt.Utils import aeq, sequence_mask, Params, DistInfo
 
 
+def sample_gumbel(input, K):
+    N = input.size(0)
+    T = input.size(1)
+    S = input.size(2)
+    noise = torch.rand((K, N, T, S)).to(input)
+    eps = 1e-20
+    noise.add_(eps).log_().neg_()
+    noise.add_(eps).log_().neg_()
+    return noise
+
+def gumbel_softmax_sample(log_probs, K, temperature):
+    #attns = gumbel_softmax_sample(log_alpha, K) # K, N, T, S
+    noise = sample_gumbel(log_probs, K) # K, N, T, S
+    x = (log_probs.unsqueeze(0) + noise) / temperature
+    x = F.softmax(x, dim=-1)
+    return x.view_as(log_probs)
+
+
 class VariationalAttention(nn.Module):
     def __init__(
         self, src_dim, tgt_dim,
         attn_dim,
+        temperature,
         p_dist_type="categorical",
         q_dist_type="categorical",
         use_prior=False,
@@ -36,6 +55,7 @@ class VariationalAttention(nn.Module):
         self.dim = attn_dim
         dim = self.dim
         self.k = 0
+        self.temperature = temperature
 
         if self.attn_type == "general":
             self.linear_in = nn.Linear(tgt_dim, src_dim, bias=False)
@@ -111,6 +131,23 @@ class VariationalAttention(nn.Module):
             log_alpha = log_alpha.unsqueeze(0).expand(K, N, T, S)
             sample_log_probs = log_alpha.gather(3, attns_id.to(log_alpha.device)).squeeze(3)
             return attns, sample_log_probs
+        else:
+            raise Exception("Unsupported dist")
+        return attns, None
+
+    def sample_attn_gumbel(self, params, temperature, n_samples=1, lengths=None, mask=None):
+        dist_type = params.dist_type
+        if dist_type == "categorical":
+            alpha = params.alpha
+            log_alpha = params.log_alpha
+            K = n_samples
+            N = alpha.size(0)
+            T = alpha.size(1)
+            S = alpha.size(2)
+            attns = gumbel_softmax_sample(log_alpha, K, temperature) # K, N, T, S
+            # log alpha: K, N, T, S
+            log_alpha = log_alpha.unsqueeze(0).expand(K, N, T, S)
+            return attns, None 
         else:
             raise Exception("Unsupported dist")
         return attns, None
@@ -231,6 +268,17 @@ class VariationalAttention(nn.Module):
             else:
                 q_sample, sample_log_probs = self.sample_attn(
                     q_scores, n_samples=self.n_samples,
+                    lengths=memory_lengths, mask=mask if memory_lengths is not None else None)
+                y_align_vectors = q_sample
+        elif self.mode == "gumbel":
+            if q_scores is None or self.use_prior:
+                p_sample, _ = self.sample_attn_gumbel(
+                    p_scores, self.temperature, n_samples=self.n_samples,
+                    lengths=memory_lengths, mask=mask if memory_lengths is not None else None)
+                y_align_vectors = p_sample
+            else:
+                q_sample, _ = self.sample_attn_gumbel(
+                    q_scores, self.temperature, n_samples=self.n_samples,
                     lengths=memory_lengths, mask=mask if memory_lengths is not None else None)
                 y_align_vectors = q_sample
         elif self.mode == "enum" or self.mode == "exact":
