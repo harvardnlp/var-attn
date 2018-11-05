@@ -47,6 +47,10 @@ source va.sh && CUDA_VISIBLE_DEVICES=0 train_cat_sample_b6
 ```bash
 source va.sh && CUDA_VISIBLE_DEVICES=0 train_cat_gumbel_b6
 ```
+* Variational categorical attention using Wake-Sleep algorithm (Ba et al 2015)
+```bash
+source va.sh && CUDA_VISIBLE_DEVICES=0 train_cat_wsram_b6
+```
 Checkpoints will be saved to the project's root directory.
 
 ### Evaluating on test
