@@ -5,6 +5,10 @@ implementation of the paper [Latent Alignment and Variational Attention](https:/
 from a fork of [OpenNMT](https://github.com/OpenNMT/OpenNMT-py).
 
 
+## Method and related research
+
+Latent Alignment and Variational Attention (NeurIPS 2018) models alignment as a latent variable and learns approximate posterior inference with variational attention. The [attention-as-a-latent-variable guide](https://yuntiandeng.com/research/probabilistic-attention/) explains distributions over attention, marginalization, categorical and Dirichlet alignments, and the distinction between posterior inference and deterministic attention.
+
 ## Dependencies
 
 The code was tested with `python 3.6` and `pytorch 0.4`.
@@ -76,3 +80,16 @@ Numbers are slightly different from those reported in the paper since this is a 
 | [Exact Marginalization](http://lstm.seas.harvard.edu/latex/var_attn/model_exact_b6_acc_65.18_ppl_5.82_e11.pt) | 6.34 | [33.29](http://lstm.seas.harvard.edu/latex/var_attn/model_exact_b6_acc_65.18_ppl_5.82_e11.pt.out) |
 | [Variational Attention + Enumeration](http://lstm.seas.harvard.edu/latex/var_attn/model_cat_enum_b6_acc_75.20_ppl_6.23_e10.pt) | 6.08  | [33.69](http://lstm.seas.harvard.edu/latex/var_attn/model_cat_enum_b6_acc_75.20_ppl_6.23_e10.pt.out) |
 | [Variational Attention + Sampling](http://lstm.seas.harvard.edu/latex/var_attn/model_cat_sample_b6_acc_74.52_ppl_6.53_e12.pt) | 6.17 | [33.30](http://lstm.seas.harvard.edu/latex/var_attn/model_cat_sample_b6_acc_74.52_ppl_6.53_e12.pt.out) |
+
+## Citation
+
+```bibtex
+@inproceedings{deng2018latent,
+  title={Latent Alignment and Variational Attention},
+  author={Yuntian Deng and Yoon Kim and Justin Chiu and Demi Guo and Alexander M. Rush},
+  booktitle={Advances in Neural Information Processing Systems},
+  volume={31},
+  year={2018},
+  url={https://arxiv.org/abs/1807.03756}
+}
+```
